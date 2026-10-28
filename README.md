@@ -41,19 +41,33 @@ Bundan sonra her `git push` siteyi otomatik günceller.
 
 (Özel alan adı veya `kullanici.github.io` adlı özel bir repo kullanırsan `baseUrl` satırını sil.)
 
+## Testler
+
+Oyun mantığını (arayüzsüz) denemek için:
+
+```bash
+npx tsx src/games/tetris/logic.test.ts
+```
+
+## Tetris kontrolleri
+
+- Telefon: ekrandaki butonlar (◀ ▶ ▼ basılı tutunca tekrarlar, Döndür, Düşür, Tut)
+- Web klavyesi: ← → ↓ hareket, ↑ veya X döndür, Z ters döndür, Boşluk hızlı düşür, C tut, P duraklat
+
 ## Yapı
 
 - `src/app/` ekranlar (Expo Router): `index.tsx` hub, `game/[id].tsx` seçilen oyun
 - `src/games/types.ts` ortak oyun arayüzü
 - `src/games/registry.ts` tüm oyunların listesi (yeni oyun = yeni klasör + buraya bir kayıt)
-- `src/games/minesweeper/`, `src/games/tetris/` oyunlar (şu an yer tutucu)
+- `src/games/tetris/` Tetris: `logic.ts` (saf oyun mantığı), `logic.test.ts` (testler), `TetrisScreen.tsx` (arayüz)
+- `src/games/minesweeper/` Mayın Tarlası (şu an yer tutucu)
 - `.github/workflows/deploy.yml` push'ta otomatik web yayını
 
 ## Yol haritası
 
 1. [x] İskelet ve hub
 2. [x] Web yayını altyapısı
-3. [ ] Mayın Tarlası
-4. [ ] Tetris
+3. [x] Tetris (ilk sürüm: butonlar + web klavyesi)
+4. [ ] Mayın Tarlası
 5. [ ] Cilalama (ses, ayarlar)
 6. [ ] Online özellikler (opsiyonel)
