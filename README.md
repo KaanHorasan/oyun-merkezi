@@ -5,6 +5,8 @@ Telefonda Expo Go ile, tarayıcıda ise GitHub Pages üzerinden çalışır.
 
 ## Yerelde çalıştırma
 
+Yeni paket eklendiğinde (ses, titreşim, kayıt) önce `npm install` çalıştır.
+
 ```bash
 npm install
 npx expo start          # telefon: Expo Go ile QR kodu okut
@@ -51,14 +53,27 @@ npx tsx src/games/tetris/logic.test.ts
 
 ## Tetris kontrolleri
 
-- Telefon: ekrandaki butonlar (◀ ▶ ▼ basılı tutunca tekrarlar, Döndür, Düşür, Tut)
-- Web klavyesi: ← → ↓ hareket, ↑ veya X döndür, Z ters döndür, Boşluk hızlı düşür, C tut, P duraklat
+**Dokunmatik (telefon ve web):**
+- Sağa/sola sürükle: parçayı kaydır
+- Aşağı sürükle: yumuşak düşür
+- Kısa dokun: döndür
+- Aşağı hızlı fırlat: anında düşür
+- Yukarı hızlı fırlat: parçayı sakla (Tut)
+- İstersen ekran butonları da var; ⚙ Ayarlar'dan kapatılabilir
+
+**Web klavyesi:** ← → ↓ hareket, ↑ veya X döndür, Z ters döndür, Boşluk hızlı düşür, C tut, P duraklat
+
+**Diğer:** parça yere değince kısa kilit gecikmesi (kaydırmaya zaman verir), hayalet parça, ses, titreşim,
+rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklatma.
 
 ## Yapı
 
 - `src/app/` ekranlar (Expo Router): `index.tsx` hub, `game/[id].tsx` seçilen oyun
 - `src/games/types.ts` ortak oyun arayüzü
 - `src/games/registry.ts` tüm oyunların listesi (yeni oyun = yeni klasör + buraya bir kayıt)
+- `src/lib/` ortak altyapı: `storage.ts` (kalıcı kayıt), `settings.ts` (ses/titreşim ayarları), `feedback.ts` (ses + titreşim)
+- `src/components/SettingsPanel.tsx` ortak ayarlar paneli
+- `assets/sounds/` ses efektleri (kodla üretilmiş kısa `.wav` dosyaları)
 - `src/games/tetris/` Tetris: `logic.ts` (saf oyun mantığı), `logic.test.ts` (testler), `TetrisScreen.tsx` (arayüz)
 - `src/games/minesweeper/` Mayın Tarlası (şu an yer tutucu)
 - `.github/workflows/deploy.yml` push'ta otomatik web yayını
@@ -67,7 +82,7 @@ npx tsx src/games/tetris/logic.test.ts
 
 1. [x] İskelet ve hub
 2. [x] Web yayını altyapısı
-3. [x] Tetris (ilk sürüm: butonlar + web klavyesi)
+3. [x] Tetris (hareketler, ses, titreşim, rekor, ayarlar, kilit gecikmesi)
 4. [ ] Mayın Tarlası
-5. [ ] Cilalama (ses, ayarlar)
+5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)

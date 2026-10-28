@@ -1,7 +1,8 @@
 // Çalıştırma: npx tsx src/games/tetris/logic.test.ts
 import {
   COLS, ROWS, PIECE_TYPES, collides, drawFromBag, getShape, hardDrop, holdPiece,
-  moveHorizontal, newGame, rotate, spawnPiece, stepDown, cellValue,
+  moveHorizontal, newGame, rotate, spawnPiece, tick, cellValue, getGhost, getDropInterval,
+  LOCK_DELAY_MS, MAX_LOCK_RESETS,
   type GameState, type PieceType,
 } from './logic';
 
@@ -103,8 +104,9 @@ function check(name: string, ok: boolean) {
 {
   let s: GameState = newGame();
   for (let r = 0; r < 6; r++) s.board[r] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 0];
-  s = stepDown(s);
+  s = hardDrop(s);
   check('Tahta tepeye dolunca oyun biter', s.gameOver);
+  check('Oyun sonu olayı bırakılır', s.event?.kind === 'gameover');
   const frozen = s;
   check('Oyun bitince hamleler işlemez', moveHorizontal(frozen, 1) === frozen && rotate(frozen) === frozen);
 }
@@ -118,7 +120,7 @@ function check(name: string, ok: boolean) {
     if (a === 0) s = moveHorizontal(s, -1);
     else if (a === 1) s = moveHorizontal(s, 1);
     else if (a === 2) s = rotate(s);
-    else if (a === 3) s = stepDown(s);
+    else if (a === 3) s = tick(s, 120);
     else if (a === 4) s = hardDrop(s);
     else s = holdPiece(s);
     steps++;
@@ -126,6 +128,65 @@ function check(name: string, ok: boolean) {
   }
   check('Rastgele simülasyon (' + steps + ' adım) tutarlı', true);
   check('cellValue 1..7 aralığında', PIECE_TYPES.every((t) => cellValue(t) >= 1 && cellValue(t) <= 7));
+}
+
+// 10) Yerçekimi: bir düşme aralığı kadar sürede 1 satır iner
+{
+  let s = newGame();
+  const y0 = s.current.y;
+  s = tick(s, getDropInterval(1) - 10);
+  check('Aralıktan kısa sürede parça inmez', s.current.y === y0);
+  s = tick(s, 20);
+  check('Aralık dolunca parça 1 satır iner', s.current.y === y0 + 1);
+}
+
+// 11) Kilit gecikmesi
+{
+  let s: GameState = newGame();
+  s = { ...s, current: getGhost(s) }; // parçayı zemine oturt
+  const y = s.current.y;
+  s = tick(s, 100);
+  check('Yere değince hemen kilitlenmez', s.current.y === y && s.board.every((r) => r.every((c) => c === 0)));
+  s = tick(s, LOCK_DELAY_MS);
+  check('Kilit süresi dolunca kilitlenir', s.board.some((r) => r.some((c) => c !== 0)) && s.event?.kind === 'lock');
+}
+
+// 12) Yerdeyken hareket kilit sayacını sıfırlar, ama sonsuza kadar değil
+{
+  let s: GameState = newGame();
+  s = { ...s, current: getGhost(s) };
+  s = tick(s, LOCK_DELAY_MS - 100);
+  s = moveHorizontal(s, 1);
+  s = tick(s, LOCK_DELAY_MS - 100);
+  check('Yerde kaydırınca kilit ertelenir', s.board.every((r) => r.every((c) => c === 0)));
+
+  let locked = false;
+  for (let i = 0; i < MAX_LOCK_RESETS + 10 && !locked; i++) {
+    s = moveHorizontal(s, i % 2 === 0 ? -1 : 1);
+    s = tick(s, LOCK_DELAY_MS - 100);
+    locked = s.board.some((r) => r.some((c) => c !== 0));
+  }
+  check('Sonsuz erteleme yok: en fazla ' + MAX_LOCK_RESETS + ' sıfırlamadan sonra kilitlenir', locked);
+}
+
+// 13) Olaylar
+{
+  let s: GameState = newGame();
+  s = rotate(s);
+  check('Döndürme olayı bırakır', s.event?.kind === 'rotate');
+  const id1 = s.event!.id;
+  s = holdPiece(s);
+  check('Olay id artar', s.event!.id === id1 + 1 && s.event!.kind === 'hold');
+
+  s = newGame();
+  s.board[ROWS - 1] = Array(COLS).fill(1).map((v, c) => (c < 4 ? 0 : v));
+  s = hardDrop({ ...s, current: { ...spawnPiece('I'), x: 0 }, next: 'O' });
+  check('Satır silince clear olayı', s.event?.kind === 'clear' && s.event.lines === 1);
+
+  s = newGame();
+  for (let r = ROWS - 4; r < ROWS; r++) s.board[r] = [0, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+  s = hardDrop({ ...s, current: { ...spawnPiece('I'), rot: 1, x: -2 }, next: 'O' });
+  check('4 satır silince tetris olayı', s.event?.kind === 'tetris');
 }
 
 console.log('\n' + passed + ' kontrol geçti.');

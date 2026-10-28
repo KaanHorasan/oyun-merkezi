@@ -4,6 +4,11 @@
 export const COLS = 10;
 export const ROWS = 20;
 
+/** Parça yere değdikten sonra kilitlenmeden önce beklenen süre (ms). */
+export const LOCK_DELAY_MS = 500;
+/** Yerdeyken hareket/döndürme ile kilit sayacının en fazla kaç kez sıfırlanabileceği. */
+export const MAX_LOCK_RESETS = 15;
+
 export type PieceType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L';
 export const PIECE_TYPES: PieceType[] = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
 
@@ -16,6 +21,10 @@ export type Piece = { type: PieceType; rot: number; x: number; y: number };
 
 export type Rng = () => number;
 
+/** Arayüzün ses/titreşim çalması için oyunun bıraktığı olay. id her olayda artar. */
+export type GameEventKind = 'rotate' | 'hold' | 'lock' | 'clear' | 'tetris' | 'levelup' | 'gameover';
+export type GameEvent = { id: number; kind: GameEventKind; lines: number };
+
 export type GameState = {
   board: Board;
   current: Piece;
@@ -27,6 +36,13 @@ export type GameState = {
   lines: number;
   level: number;
   gameOver: boolean;
+  /** Yerçekimi için biriken süre (ms) */
+  dropAcc: number;
+  /** Parça yerdeyken biriken kilit süresi (ms) */
+  lockAcc: number;
+  /** Kilit sayacı kaç kez sıfırlandı */
+  lockResets: number;
+  event: GameEvent | null;
 };
 
 // ---------- Parça şekilleri ----------
@@ -146,6 +162,25 @@ export function spawnPiece(type: PieceType): Piece {
   };
 }
 
+// ---------- Yardımcılar ----------
+
+function withEvent(state: GameState, kind: GameEventKind, lines = 0): GameState {
+  return { ...state, event: { id: (state.event?.id ?? 0) + 1, kind, lines } };
+}
+
+/** Parça aşağı inemiyorsa yerde (zeminde veya başka parçanın üstünde) demektir. */
+export function isGrounded(state: GameState): boolean {
+  return collides(state.board, { ...state.current, y: state.current.y + 1 });
+}
+
+/** Hareket/döndürme sonrası parça yerdeyse kilit sayacını sıfırlar (en fazla MAX_LOCK_RESETS kez). */
+function afterPlayerMove(state: GameState): GameState {
+  if (isGrounded(state) && state.lockResets < MAX_LOCK_RESETS) {
+    return { ...state, lockAcc: 0, lockResets: state.lockResets + 1 };
+  }
+  return state;
+}
+
 // ---------- Oyun akışı ----------
 
 export function newGame(rng: Rng = Math.random): GameState {
@@ -162,6 +197,10 @@ export function newGame(rng: Rng = Math.random): GameState {
     lines: 0,
     level: 1,
     gameOver: false,
+    dropAcc: 0,
+    lockAcc: 0,
+    lockResets: 0,
+    event: null,
   };
 }
 
@@ -175,7 +214,8 @@ export function getDropInterval(level: number): number {
 export function moveHorizontal(state: GameState, dx: number): GameState {
   if (state.gameOver) return state;
   const moved = { ...state.current, x: state.current.x + dx };
-  return collides(state.board, moved) ? state : { ...state, current: moved };
+  if (collides(state.board, moved)) return state;
+  return afterPlayerMove({ ...state, current: moved });
 }
 
 // Basitleştirilmiş duvar itmesi (tam SRS değil): dönüş sığmazsa yana/yukarı dener.
@@ -193,7 +233,9 @@ export function rotate(state: GameState, dir: 1 | -1 = 1): GameState {
   const rot = (state.current.rot + dir + 4) % 4;
   for (const [dx, dy] of KICKS) {
     const candidate = { ...state.current, rot, x: state.current.x + dx, y: state.current.y + dy };
-    if (!collides(state.board, candidate)) return { ...state, current: candidate };
+    if (!collides(state.board, candidate)) {
+      return withEvent(afterPlayerMove({ ...state, current: candidate }), 'rotate');
+    }
   }
   return state;
 }
@@ -203,15 +245,42 @@ export function softDrop(state: GameState): GameState {
   if (state.gameOver) return state;
   const moved = { ...state.current, y: state.current.y + 1 };
   if (collides(state.board, moved)) return state;
-  return { ...state, current: moved, score: state.score + 1 };
+  return { ...state, current: moved, score: state.score + 1, lockAcc: 0, lockResets: 0 };
 }
 
-/** Zamanla düşme: aşağı inebiliyorsa iner, inemiyorsa kilitlenir. */
-export function stepDown(state: GameState, rng: Rng = Math.random): GameState {
+/**
+ * Zamanı ilerletir (dtMs milisaniye). Yerçekimiyle parçayı indirir;
+ * parça yerdeyse kilit sayacını işletir ve süre dolunca kilitler.
+ */
+export function tick(state: GameState, dtMs: number, rng: Rng = Math.random): GameState {
   if (state.gameOver) return state;
-  const moved = { ...state.current, y: state.current.y + 1 };
-  if (!collides(state.board, moved)) return { ...state, current: moved };
-  return lockPiece(state, rng);
+
+  const interval = getDropInterval(state.level);
+  let current = state.current;
+  let dropAcc = state.dropAcc + dtMs;
+  let lockAcc = state.lockAcc;
+  let lockResets = state.lockResets;
+
+  while (dropAcc >= interval) {
+    const moved = { ...current, y: current.y + 1 };
+    if (collides(state.board, moved)) {
+      dropAcc = interval; // yerde: bir sonraki hamleye hazır bekle
+      break;
+    }
+    current = moved;
+    dropAcc -= interval;
+    lockAcc = 0;
+    lockResets = 0;
+  }
+
+  const next: GameState = { ...state, current, dropAcc, lockAcc, lockResets };
+
+  if (isGrounded(next)) {
+    const acc = next.lockAcc + dtMs;
+    if (acc >= LOCK_DELAY_MS) return lockPiece(next, rng);
+    return { ...next, lockAcc: acc };
+  }
+  return { ...next, lockAcc: 0 };
 }
 
 /** Parçanın şu an düşeceği en alt konum (hayalet parça). */
@@ -228,25 +297,35 @@ export function hardDrop(state: GameState, rng: Rng = Math.random): GameState {
   return lockPiece({ ...state, current: ghost, score: state.score + 2 * distance }, rng);
 }
 
+function resetTimers(state: GameState): GameState {
+  return { ...state, dropAcc: 0, lockAcc: 0, lockResets: 0 };
+}
+
 export function holdPiece(state: GameState, rng: Rng = Math.random): GameState {
   if (state.gameOver || !state.canHold) return state;
   if (state.hold === null) {
     const draw = drawFromBag(state.bag, rng);
-    return {
+    return withEvent(
+      resetTimers({
+        ...state,
+        hold: state.current.type,
+        current: spawnPiece(state.next),
+        next: draw.type,
+        bag: draw.bag,
+        canHold: false,
+      }),
+      'hold',
+    );
+  }
+  return withEvent(
+    resetTimers({
       ...state,
       hold: state.current.type,
-      current: spawnPiece(state.next),
-      next: draw.type,
-      bag: draw.bag,
+      current: spawnPiece(state.hold),
       canHold: false,
-    };
-  }
-  return {
-    ...state,
-    hold: state.current.type,
-    current: spawnPiece(state.hold),
-    canHold: false,
-  };
+    }),
+    'hold',
+  );
 }
 
 /** Parçayı tahtaya yazar, dolu satırları siler, puanı günceller, yeni parça getirir. */
@@ -257,27 +336,40 @@ function lockPiece(state: GameState, rng: Rng): GameState {
     if (r < 0) overflow = true;
     else board[r][c] = cellValue(state.current.type);
   }
-  if (overflow) return { ...state, board, gameOver: true };
+  if (overflow) return withEvent({ ...state, board, gameOver: true }, 'gameover');
 
   const remaining = board.filter((row) => row.some((cell) => cell === 0));
   const cleared = ROWS - remaining.length;
   while (remaining.length < ROWS) remaining.unshift(emptyRow());
 
   const lines = state.lines + cleared;
+  const level = Math.floor(lines / 10) + 1;
   const score = state.score + LINE_SCORES[cleared] * state.level;
 
   const piece = spawnPiece(state.next);
   const draw = drawFromBag(state.bag, rng);
-  return {
-    ...state,
-    board: remaining,
-    current: piece,
-    next: draw.type,
-    bag: draw.bag,
-    canHold: true,
-    score,
-    lines,
-    level: Math.floor(lines / 10) + 1,
-    gameOver: collides(remaining, piece),
-  };
+  const gameOver = collides(remaining, piece);
+
+  let kind: GameEventKind = 'lock';
+  if (cleared === 4) kind = 'tetris';
+  else if (cleared > 0) kind = 'clear';
+  if (level > state.level) kind = 'levelup';
+  if (gameOver) kind = 'gameover';
+
+  return withEvent(
+    resetTimers({
+      ...state,
+      board: remaining,
+      current: piece,
+      next: draw.type,
+      bag: draw.bag,
+      canHold: true,
+      score,
+      lines,
+      level,
+      gameOver,
+    }),
+    kind,
+    cleared,
+  );
 }
