@@ -1,12 +1,14 @@
 import { FlatList, Pressable, Text, View, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import InstallButton from '@/components/InstallButton';
 import { games } from '@/games/registry';
 
 export default function Hub() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Oyun Merkezi</Text>
+      <InstallButton />
       <FlatList
         data={games}
         keyExtractor={(g) => g.id}

@@ -27,7 +27,7 @@ jobs:
 
       - run: npm ci
 
-      - run: npx expo export --platform web
+      - run: npm run build:web
 
       # Bilinmeyen adreslerde Expo'nun 404 sayfası gösterilsin, Jekyll devreye girmesin
       - run: |

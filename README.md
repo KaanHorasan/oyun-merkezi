@@ -43,6 +43,26 @@ Bundan sonra her `git push` siteyi otomatik günceller.
 
 (Özel alan adı veya `kullanici.github.io` adlı özel bir repo kullanırsan `baseUrl` satırını sil.)
 
+## Uygulama olarak yükleme (PWA)
+
+Site, telefona uygulama gibi kurulabilir. Ana sayfadaki **📲 Uygulamayı yükle** butonu:
+
+- **Android (Chrome/Edge):** tarayıcının yükleme penceresini açar; onaylayınca ana ekrana ikon eklenir.
+- **iPhone/iPad (Safari):** Apple tarayıcıdan yüklemeye izin vermediği için adımları gösterir
+  (Paylaş ⬆︎ → Ana Ekrana Ekle).
+- Zaten kuruluysa (uygulama olarak açıldıysa) buton görünmez.
+
+Kurulan uygulama tam ekran açılır ve ilk açılıştan sonra **internetsiz de çalışır**
+(tüm dosyalar önbelleğe alınır). Yeni sürüm yayınlanınca bir sonraki açılışta kendiliğinden güncellenir.
+
+Teknik notlar:
+- `public/manifest.json`, `public/icons/`, `public/apple-touch-icon.png`: uygulama adı, renkleri ve ikonları
+- `scripts/post-build.js` + `scripts/sw.template.js`: derlemeden sonra servis çalışanını (`sw.js`) üretir ve
+  HTML'e manifest/ikon etiketlerini ekler. Bu yüzden web derlemesi için `npm run build:web` kullanılır
+  (GitHub iş akışı bunu zaten yapar).
+- Bu Expo sürümünde özel bir `src/app/+html.tsx` eklemek stil dosyasını çıktıdan düşürüyor, bu yüzden eklemeyin.
+- Geliştirme modunda (`expo start`) servis çalışanı kapalıdır.
+
 ## Testler
 
 Oyun mantığını (arayüzsüz) denemek için:
@@ -76,13 +96,14 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 - `assets/sounds/` ses efektleri (kodla üretilmiş kısa `.wav` dosyaları)
 - `src/games/tetris/` Tetris: `logic.ts` (saf oyun mantığı), `logic.test.ts` (testler), `TetrisScreen.tsx` (arayüz)
 - `src/games/minesweeper/` Mayın Tarlası (şu an yer tutucu)
-- `.github/workflows/deploy.yml` push'ta otomatik web yayını
+- `.github/workflows/deploy.yml` push'ta otomatik web yayını (`npm run build:web`)
 
 ## Yol haritası
 
 1. [x] İskelet ve hub
 2. [x] Web yayını altyapısı
 3. [x] Tetris (hareketler, ses, titreşim, rekor, ayarlar, kilit gecikmesi)
+   - [x] Uygulama olarak yükleme (PWA) ve internetsiz çalışma
 4. [ ] Mayın Tarlası
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)
