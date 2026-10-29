@@ -45,7 +45,9 @@ Bundan sonra her `git push` siteyi otomatik günceller.
 
 ## Müzik
 
-Tetris'te arka planda **Korobeiniki** melodisi çalar (⚙ Ayarlar'dan "Müzik" ile kapatılabilir; ses efektlerinden ayrıdır).
+Tetris'te arka planda **Korobeiniki** melodisi çalar. ⚙ Ayarlar'da müzik ve ses efektleri için ayrı açma/kapama anahtarı
+ve ayrı **ses düzeyi çubuğu** (sürükle veya − / + düğmeleri) vardır. Ayarlar açıkken müzik çalmaya devam eder, böylece
+ses düzeyini ayarlarken duyabilirsin; efekt çubuğunu bırakınca örnek bir ses çalar. Seçimler cihazda saklanır.
 Oyun çalışırken çalar, duraklatınca / oyun bitince durur, yeni oyunda baştan başlar.
 
 - Korobeiniki, 1861 tarihli bir Rus halk şarkısıdır ve melodisi telif dışıdır. Resmî Tetris oyun kaydı veya
@@ -81,6 +83,7 @@ Oyun mantığını (arayüzsüz) denemek için:
 
 ```bash
 npx tsx src/games/tetris/logic.test.ts
+npx tsx src/lib/volume.test.ts
 ```
 
 ## Tetris kontrolleri
@@ -104,7 +107,7 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 - `src/games/types.ts` ortak oyun arayüzü
 - `src/games/registry.ts` tüm oyunların listesi (yeni oyun = yeni klasör + buraya bir kayıt)
 - `src/lib/` ortak altyapı: `storage.ts` (kalıcı kayıt), `settings.ts` (ses/titreşim ayarları), `feedback.ts` (ses + titreşim)
-- `src/components/SettingsPanel.tsx` ortak ayarlar paneli
+- `src/components/SettingsPanel.tsx` ortak ayarlar paneli, `VolumeSlider.tsx` ses düzeyi çubuğu
 - `assets/sounds/` ses efektleri ve müzik (kodla üretilmiş `.wav` dosyaları)
 - `tools/make-music.py` Tetris müziği üreticisi
 - `src/games/tetris/` Tetris: `logic.ts` (saf oyun mantığı), `logic.test.ts` (testler), `TetrisScreen.tsx` (arayüz)

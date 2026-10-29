@@ -3,7 +3,7 @@ import { AppState, PanResponder, Platform, Pressable, StyleSheet, Text, View } f
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SettingsPanel from '@/components/SettingsPanel';
-import { haptic, playSound, rewindMusic, setMusic } from '@/lib/feedback';
+import { haptic, playSound, rewindMusic, setMusic, setMusicVolume } from '@/lib/feedback';
 import type { HapticKind, SoundName } from '@/lib/feedback';
 import { useSettings } from '@/lib/settings';
 import { loadJSON, saveJSON } from '@/lib/storage';
@@ -244,7 +244,12 @@ export default function TetrisScreen({ onExit }: GameProps) {
   }, [running, act]);
 
   // Müzik: oyun çalışırken ve ayar açıkken çalar; duraklatınca, oyun bitince ve ekrandan çıkınca durur.
-  const musicOn = settings.music && running;
+  // Ayarlar açıkken (oyun duraklamışken) de çalar ki ses düzeyini ayarlarken duyulsun.
+  const musicOn = settings.music && (running || settingsOpen);
+  const { musicVolume } = settings;
+  useEffect(() => {
+    setMusicVolume('tetris', musicVolume);
+  }, [musicVolume]);
   useEffect(() => {
     musicWantedRef.current = musicOn;
     setMusic('tetris', musicOn);
@@ -259,8 +264,8 @@ export default function TetrisScreen({ onExit }: GameProps) {
   const event = game?.event ?? null;
   useEffect(() => {
     if (!event) return;
-    const { sound, vibration } = settingsRef.current;
-    if (sound) playSound(SOUND_FOR[event.kind]);
+    const { sound, sfxVolume, vibration } = settingsRef.current;
+    if (sound) playSound(SOUND_FOR[event.kind], sfxVolume);
     if (vibration) haptic(HAPTIC_FOR[event.kind]);
   }, [event]);
 

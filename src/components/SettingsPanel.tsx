@@ -1,4 +1,6 @@
 import { Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import VolumeSlider from '@/components/VolumeSlider';
+import { playSound } from '@/lib/feedback';
 import { useSettings } from '@/lib/settings';
 
 type Props = {
@@ -38,7 +40,18 @@ export default function SettingsPanel({ onClose, ghost = false, buttons = false 
       <View style={styles.card}>
         <Text style={styles.title}>Ayarlar</Text>
         <Row label="Ses efektleri" value={settings.sound} onChange={(v) => update({ sound: v })} />
+        <VolumeSlider
+          value={settings.sfxVolume}
+          disabled={!settings.sound}
+          onChange={(v) => update({ sfxVolume: v })}
+          onChangeEnd={(v) => playSound('clear', v)} // bırakınca örnek ses çalar
+        />
         <Row label="Müzik" value={settings.music} onChange={(v) => update({ music: v })} />
+        <VolumeSlider
+          value={settings.musicVolume}
+          disabled={!settings.music}
+          onChange={(v) => update({ musicVolume: v })}
+        />
         <Row
           label="Titreşim"
           hint={Platform.OS === 'web' ? 'Web’de yalnızca Android Chrome’da çalışır' : undefined}

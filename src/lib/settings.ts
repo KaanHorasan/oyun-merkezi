@@ -4,16 +4,29 @@ import { loadJSON, saveJSON } from './storage';
 export type Settings = {
   sound: boolean;
   music: boolean;
+  /** 0..1 */
+  sfxVolume: number;
+  /** 0..1 */
+  musicVolume: number;
   vibration: boolean;
   ghost: boolean;
   showButtons: boolean;
 };
 
-const DEFAULTS: Settings = { sound: true, music: true, vibration: true, ghost: true, showButtons: true };
+const DEFAULTS: Settings = {
+  sound: true,
+  music: true,
+  sfxVolume: 0.8,
+  musicVolume: 0.35,
+  vibration: true,
+  ghost: true,
+  showButtons: true,
+};
 const KEY = 'settings:v1';
 
 let current: Settings = DEFAULTS;
 let loaded = false;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -45,8 +58,10 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
 
   const update = useCallback((patch: Partial<Settings>) => {
     current = { ...current, ...patch };
-    saveJSON(KEY, current);
     emit();
+    // Ses çubuğu sürüklenirken saniyede onlarca değişiklik olur; kaydı bekletip tek seferde yaz.
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveJSON(KEY, current), 300);
   }, []);
 
   return [settings, update];

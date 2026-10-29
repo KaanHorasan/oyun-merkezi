@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { createAudioPlayer } from 'expo-audio';
 import type { AudioPlayer } from 'expo-audio';
+import { clamp01 } from './volume';
 
 // ---------- Ses ----------
 
@@ -20,13 +21,15 @@ export type SoundName = keyof typeof SOURCES;
 // Oynatıcılar ilk kullanımda (tarayıcıda/telefonda, sunucuda değil) oluşturulur.
 const players: Partial<Record<SoundName, AudioPlayer>> = {};
 
-export function playSound(name: SoundName) {
+/** volume: 0..1 (ayarlardaki efekt sesi) */
+export function playSound(name: SoundName, volume = 1) {
   try {
     let player = players[name];
     if (!player) {
       player = createAudioPlayer(SOURCES[name]);
       players[name] = player;
     }
+    player.volume = clamp01(volume);
     player.seekTo(0);
     player.play();
   } catch {
@@ -42,15 +45,16 @@ const MUSIC_SOURCES = {
 
 export type MusicName = keyof typeof MUSIC_SOURCES;
 
-const MUSIC_VOLUME = 0.3;
+const DEFAULT_MUSIC_VOLUME = 0.35;
 const musicPlayers: Partial<Record<MusicName, AudioPlayer>> = {};
+const musicVolumes: Partial<Record<MusicName, number>> = {};
 
 function getMusic(name: MusicName): AudioPlayer {
   let player = musicPlayers[name];
   if (!player) {
     player = createAudioPlayer(MUSIC_SOURCES[name]);
     player.loop = true;
-    player.volume = MUSIC_VOLUME;
+    player.volume = musicVolumes[name] ?? DEFAULT_MUSIC_VOLUME;
     musicPlayers[name] = player;
   }
   return player;
@@ -66,6 +70,18 @@ export function setMusic(name: MusicName, on: boolean) {
     getMusic(name).play();
   } catch {
     // müzik çalmazsa oyun etkilenmesin
+  }
+}
+
+/** Müzik ses düzeyi (0..1). Çalıyorsa hemen uygulanır, çalmıyorsa bir sonraki başlatmada kullanılır. */
+export function setMusicVolume(name: MusicName, volume: number) {
+  try {
+    const v = clamp01(volume);
+    musicVolumes[name] = v;
+    const player = musicPlayers[name];
+    if (player) player.volume = v;
+  } catch {
+    // önemli değil
   }
 }
 
