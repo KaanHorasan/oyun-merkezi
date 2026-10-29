@@ -17,3 +17,11 @@ export async function saveJSON(key: string, value: unknown): Promise<void> {
     // kayıt başarısız olursa oyun yine de devam eder
   }
 }
+
+export async function removeKey(key: string): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch {
+    // önemli değil
+  }
+}

@@ -43,6 +43,26 @@ Bundan sonra her `git push` siteyi otomatik günceller.
 
 (Özel alan adı veya `kullanici.github.io` adlı özel bir repo kullanırsan `baseUrl` satırını sil.)
 
+## Sonsuz Mayın Tarlası
+
+Her yöne sonsuza uzanan bir mayın tarlası. Skor, mayına basmadan açtığın kare sayısıdır; mayına basınca oyun biter.
+
+- **Kontroller:** dokun = aç · basılı tut (web'de sağ tık) = bayrak · sürükle = haritada gez ·
+  iki parmak (web'de tekerlek) = yakınlaştır · 🚩/⛏️ düğmesi = dokunmayı bayrak moduna çevirir ·
+  bir sayının çevresine o kadar bayrak koyup sayıya dokun = kalan komşuları aç.
+- **Zorluk:** Kolay %12, Normal %16, Zor %20 mayın. Her zorluk için ayrı rekor tutulur.
+- **İlk dokunuş her zaman güvenli:** çevresindeki 5x5 alanda mayın olmaz, açılış zincirleme genişler.
+- **Kayıt:** oyun otomatik kaydedilir; menüden "Devam et" ile kaldığın yerden sürer.
+
+Nasıl çalışır (geliştirici notu):
+- Dünya 16x16'lık **bölümlere (chunk)** ayrılır. Mayınlar saklanmaz; bir karenin mayın olup olmadığı
+  (tohum, x, y) üçlüsünden karma ile hesaplanır. Bellekte ve kayıtta yalnızca açılan/bayraklanan kareler tutulur,
+  bu yüzden dünya gerçekten sınırsızdır.
+- Ekranda yalnızca görünen kareler çizilir; kaydırırken sadece kapsayıcı kayar.
+- `world.ts` oyun mantığı, `geometry.ts` kamera/dokunma matematiği, `persistence.ts` kayıt,
+  `MinesweeperScreen.tsx` arayüz. İlk üçü testlidir.
+- Sıradaki fikirler: günlük görevler, başarımlar, oyun içi para birimi (mantık ve ekran buna göre ayrıştırıldı).
+
 ## Müzik
 
 Tetris'te arka planda **Korobeiniki** melodisi çalar. ⚙ Ayarlar'da müzik ve ses efektleri için ayrı açma/kapama anahtarı
@@ -84,6 +104,8 @@ Oyun mantığını (arayüzsüz) denemek için:
 ```bash
 npx tsx src/games/tetris/logic.test.ts
 npx tsx src/lib/volume.test.ts
+npx tsx src/games/minesweeper/world.test.ts
+npx tsx src/games/minesweeper/geometry.test.ts
 ```
 
 ## Tetris kontrolleri
@@ -111,7 +133,7 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 - `assets/sounds/` ses efektleri ve müzik (kodla üretilmiş `.wav` dosyaları)
 - `tools/make-music.py` Tetris müziği üreticisi
 - `src/games/tetris/` Tetris: `logic.ts` (saf oyun mantığı), `logic.test.ts` (testler), `TetrisScreen.tsx` (arayüz)
-- `src/games/minesweeper/` Mayın Tarlası (şu an yer tutucu)
+- `src/games/minesweeper/` Sonsuz Mayın Tarlası: `world.ts` (mantık), `geometry.ts` (kamera), `persistence.ts` (kayıt), `MinesweeperScreen.tsx` (arayüz)
 - `.github/workflows/deploy.yml` push'ta otomatik web yayını (`npm run build:web`)
 
 ## Yol haritası
@@ -121,6 +143,7 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 3. [x] Tetris (hareketler, ses, titreşim, rekor, ayarlar, kilit gecikmesi)
    - [x] Uygulama olarak yükleme (PWA) ve internetsiz çalışma
    - [x] Arka plan müziği (Korobeiniki)
-4. [ ] Mayın Tarlası
+4. [x] Sonsuz Mayın Tarlası (ilk sürüm: sonsuz dünya, bölümler, kayıt, rekor)
+   - [ ] Günlük görevler, başarımlar, oyun içi para birimi
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)

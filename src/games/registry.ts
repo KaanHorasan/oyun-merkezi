@@ -12,8 +12,8 @@ export const games: GameDefinition[] = [
   },
   {
     id: 'minesweeper',
-    name: 'Mayın Tarlası',
-    description: 'Mayınlara basmadan tahtayı aç.',
+    name: 'Sonsuz Mayın Tarlası',
+    description: 'Sınırsız bir dünyada mayınlara basmadan ilerle.',
     icon: '💣',
     Component: MinesweeperScreen,
   },

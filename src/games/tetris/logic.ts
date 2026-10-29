@@ -303,29 +303,32 @@ function resetTimers(state: GameState): GameState {
 
 export function holdPiece(state: GameState, rng: Rng = Math.random): GameState {
   if (state.gameOver || !state.canHold) return state;
+
+  let swapped: GameState;
   if (state.hold === null) {
     const draw = drawFromBag(state.bag, rng);
-    return withEvent(
-      resetTimers({
-        ...state,
-        hold: state.current.type,
-        current: spawnPiece(state.next),
-        next: draw.type,
-        bag: draw.bag,
-        canHold: false,
-      }),
-      'hold',
-    );
-  }
-  return withEvent(
-    resetTimers({
+    swapped = {
+      ...state,
+      hold: state.current.type,
+      current: spawnPiece(state.next),
+      next: draw.type,
+      bag: draw.bag,
+      canHold: false,
+    };
+  } else {
+    swapped = {
       ...state,
       hold: state.current.type,
       current: spawnPiece(state.hold),
       canHold: false,
-    }),
-    'hold',
-  );
+    };
+  }
+
+  // Doğacak parçanın yeri doluysa (yığın tepeye ulaşmış) oyun biter; parça asla blokların içine girmez.
+  if (collides(state.board, swapped.current)) {
+    return withEvent(resetTimers({ ...swapped, gameOver: true }), 'gameover');
+  }
+  return withEvent(resetTimers(swapped), 'hold');
 }
 
 /** Parçayı tahtaya yazar, dolu satırları siler, puanı günceller, yeni parça getirir. */

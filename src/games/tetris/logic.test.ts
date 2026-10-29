@@ -189,4 +189,13 @@ function check(name: string, ok: boolean) {
   check('4 satır silince tetris olayı', s.event?.kind === 'tetris');
 }
 
+// 14) Hold ile doğacak yer doluysa oyun biter (parça blokların içine girmez)
+{
+  let s: GameState = newGame();
+  s = { ...s, hold: 'O', current: { ...spawnPiece('T'), y: 10 } };
+  for (let r = 0; r < 2; r++) for (let c = 3; c < 7; c++) s.board[r][c] = 1; // doğma bölgesini doldur
+  const after = holdPiece(s);
+  check('Hold: doğacak yer doluysa oyun biter', after.gameOver && after.event?.kind === 'gameover');
+}
+
 console.log('\n' + passed + ' kontrol geçti.');
