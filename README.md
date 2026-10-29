@@ -43,6 +43,18 @@ Bundan sonra her `git push` siteyi otomatik günceller.
 
 (Özel alan adı veya `kullanici.github.io` adlı özel bir repo kullanırsan `baseUrl` satırını sil.)
 
+## Müzik
+
+Tetris'te arka planda **Korobeiniki** melodisi çalar (⚙ Ayarlar'dan "Müzik" ile kapatılabilir; ses efektlerinden ayrıdır).
+Oyun çalışırken çalar, duraklatınca / oyun bitince durur, yeni oyunda baştan başlar.
+
+- Korobeiniki, 1861 tarihli bir Rus halk şarkısıdır ve melodisi telif dışıdır. Resmî Tetris oyun kaydı veya
+  resmî Game Boy düzenlemesi **kullanılmadı**; melodi ve bas çizgisi `tools/make-music.py` içinde notalarla
+  yazılıp kodla sentezlenir. (Kulağa tanıdık gelir ama birebir resmî kayıt değildir.)
+- Notaları veya temposu değiştirmek için `tools/make-music.py` dosyasını düzenleyip `python3 tools/make-music.py`
+  çalıştırın (numpy ve ffmpeg gerekir); `assets/sounds/music-tetris.wav` yeniden üretilir.
+- Tarayıcılar sesi ilk dokunuştan önce engelleyebilir; ilk dokunuş/tuşta müzik başlar.
+
 ## Uygulama olarak yükleme (PWA)
 
 Site, telefona uygulama gibi kurulabilir. Ana sayfadaki **📲 Uygulamayı yükle** butonu:
@@ -93,7 +105,8 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 - `src/games/registry.ts` tüm oyunların listesi (yeni oyun = yeni klasör + buraya bir kayıt)
 - `src/lib/` ortak altyapı: `storage.ts` (kalıcı kayıt), `settings.ts` (ses/titreşim ayarları), `feedback.ts` (ses + titreşim)
 - `src/components/SettingsPanel.tsx` ortak ayarlar paneli
-- `assets/sounds/` ses efektleri (kodla üretilmiş kısa `.wav` dosyaları)
+- `assets/sounds/` ses efektleri ve müzik (kodla üretilmiş `.wav` dosyaları)
+- `tools/make-music.py` Tetris müziği üreticisi
 - `src/games/tetris/` Tetris: `logic.ts` (saf oyun mantığı), `logic.test.ts` (testler), `TetrisScreen.tsx` (arayüz)
 - `src/games/minesweeper/` Mayın Tarlası (şu an yer tutucu)
 - `.github/workflows/deploy.yml` push'ta otomatik web yayını (`npm run build:web`)
@@ -104,6 +117,7 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 2. [x] Web yayını altyapısı
 3. [x] Tetris (hareketler, ses, titreşim, rekor, ayarlar, kilit gecikmesi)
    - [x] Uygulama olarak yükleme (PWA) ve internetsiz çalışma
+   - [x] Arka plan müziği (Korobeiniki)
 4. [ ] Mayın Tarlası
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)

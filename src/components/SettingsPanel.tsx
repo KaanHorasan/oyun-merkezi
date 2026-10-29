@@ -37,7 +37,8 @@ export default function SettingsPanel({ onClose, ghost = false, buttons = false 
     <View style={styles.backdrop}>
       <View style={styles.card}>
         <Text style={styles.title}>Ayarlar</Text>
-        <Row label="Ses" value={settings.sound} onChange={(v) => update({ sound: v })} />
+        <Row label="Ses efektleri" value={settings.sound} onChange={(v) => update({ sound: v })} />
+        <Row label="Müzik" value={settings.music} onChange={(v) => update({ music: v })} />
         <Row
           label="Titreşim"
           hint={Platform.OS === 'web' ? 'Web’de yalnızca Android Chrome’da çalışır' : undefined}

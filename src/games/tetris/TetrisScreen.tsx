@@ -3,7 +3,7 @@ import { AppState, PanResponder, Platform, Pressable, StyleSheet, Text, View } f
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SettingsPanel from '@/components/SettingsPanel';
-import { haptic, playSound } from '@/lib/feedback';
+import { haptic, playSound, rewindMusic, setMusic } from '@/lib/feedback';
 import type { HapticKind, SoundName } from '@/lib/feedback';
 import { useSettings } from '@/lib/settings';
 import { loadJSON, saveJSON } from '@/lib/storage';
@@ -196,6 +196,7 @@ export default function TetrisScreen({ onExit }: GameProps) {
 
   const pausedRef = useRef(false);
   const settingsRef = useRef(settings);
+  const musicWantedRef = useRef(false);
   const bestRef = useRef(0);
   const cellRef = useRef(24);
   const lastTickRef = useRef(0);
@@ -222,6 +223,7 @@ export default function TetrisScreen({ onExit }: GameProps) {
   }, []);
 
   const restart = () => {
+    rewindMusic('tetris');
     setGame(newGame());
     setPaused(false);
     setNewRecord(false);
@@ -240,6 +242,18 @@ export default function TetrisScreen({ onExit }: GameProps) {
     }, TICK_MS);
     return () => clearInterval(id);
   }, [running, act]);
+
+  // Müzik: oyun çalışırken ve ayar açıkken çalar; duraklatınca, oyun bitince ve ekrandan çıkınca durur.
+  const musicOn = settings.music && running;
+  useEffect(() => {
+    musicWantedRef.current = musicOn;
+    setMusic('tetris', musicOn);
+  }, [musicOn]);
+  useEffect(() => () => setMusic('tetris', false), []);
+  // Tarayıcılar sesi ilk dokunuştan önce engelleyebilir; dokunuş/tuşta tekrar dene.
+  const nudgeMusic = useCallback(() => {
+    if (musicWantedRef.current) setMusic('tetris', true);
+  }, []);
 
   // Ses ve titreşim
   const event = game?.event ?? null;
@@ -275,6 +289,7 @@ export default function TetrisScreen({ onExit }: GameProps) {
     if (Platform.OS !== 'web') return;
     const onKey = (e: KeyboardEvent) => {
       const k = e.key;
+      nudgeMusic();
       if (k === 'ArrowLeft') act((s) => moveHorizontal(s, -1));
       else if (k === 'ArrowRight') act((s) => moveHorizontal(s, 1));
       else if (k === 'ArrowDown') act((s) => softDrop(s));
@@ -288,7 +303,7 @@ export default function TetrisScreen({ onExit }: GameProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [act]);
+  }, [act, nudgeMusic]);
 
   // Dokunmatik hareketler:
   //  - sağa/sola sürükle: parçayı kaydır (parmağı hücre hızıyla takip eder)
@@ -302,6 +317,7 @@ export default function TetrisScreen({ onExit }: GameProps) {
       onMoveShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
+        nudgeMusic();
         const g = gestureRef.current;
         g.anchorX = 0;
         g.anchorY = 0;
@@ -365,7 +381,7 @@ export default function TetrisScreen({ onExit }: GameProps) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} onTouchStart={nudgeMusic}>
       <View style={styles.header}>
         <Pressable onPress={onExit} hitSlop={10}>
           <Text style={styles.headerBtn}>‹ Geri</Text>

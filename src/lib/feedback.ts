@@ -34,6 +34,50 @@ export function playSound(name: SoundName) {
   }
 }
 
+// ---------- Müzik (döngüde çalan arka plan) ----------
+
+const MUSIC_SOURCES = {
+  tetris: require('../../assets/sounds/music-tetris.wav'),
+} as const;
+
+export type MusicName = keyof typeof MUSIC_SOURCES;
+
+const MUSIC_VOLUME = 0.3;
+const musicPlayers: Partial<Record<MusicName, AudioPlayer>> = {};
+
+function getMusic(name: MusicName): AudioPlayer {
+  let player = musicPlayers[name];
+  if (!player) {
+    player = createAudioPlayer(MUSIC_SOURCES[name]);
+    player.loop = true;
+    player.volume = MUSIC_VOLUME;
+    musicPlayers[name] = player;
+  }
+  return player;
+}
+
+/** Müziği başlatır veya duraklatır. Tarayıcı izin vermezse (kullanıcı henüz dokunmadıysa) sessizce geçer; sonraki dokunuşta tekrar denenir. */
+export function setMusic(name: MusicName, on: boolean) {
+  try {
+    if (!on) {
+      musicPlayers[name]?.pause();
+      return;
+    }
+    getMusic(name).play();
+  } catch {
+    // müzik çalmazsa oyun etkilenmesin
+  }
+}
+
+/** Müziği başa sarar (yeni oyun başlarken). */
+export function rewindMusic(name: MusicName) {
+  try {
+    musicPlayers[name]?.seekTo(0);
+  } catch {
+    // önemli değil
+  }
+}
+
 // ---------- Titreşim ----------
 
 export type HapticKind = 'select' | 'light' | 'medium' | 'success' | 'error';

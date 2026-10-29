@@ -3,12 +3,13 @@ import { loadJSON, saveJSON } from './storage';
 
 export type Settings = {
   sound: boolean;
+  music: boolean;
   vibration: boolean;
   ghost: boolean;
   showButtons: boolean;
 };
 
-const DEFAULTS: Settings = { sound: true, vibration: true, ghost: true, showButtons: true };
+const DEFAULTS: Settings = { sound: true, music: true, vibration: true, ghost: true, showButtons: true };
 const KEY = 'settings:v1';
 
 let current: Settings = DEFAULTS;
