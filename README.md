@@ -45,23 +45,31 @@ Bundan sonra her `git push` siteyi otomatik günceller.
 
 ## Sonsuz Mayın Tarlası
 
-Her yöne sonsuza uzanan bir mayın tarlası. Skor, mayına basmadan açtığın kare sayısıdır; mayına basınca oyun biter.
+Her yöne sonsuza uzanan bir mayın tarlası. **Oyun bitmez**: mayına basarsan sadece o bölüm (16×16 kare) patlar ve kilitlenir.
+Bölümü oyun içi parayla onarırsın. Skor, açtığın güvenli kare sayısıdır.
 
 - **Kontroller:** dokun = aç · basılı tut (web'de sağ tık) = bayrak · sürükle = haritada gez ·
   iki parmak (web'de tekerlek) = yakınlaştır · 🚩/⛏️ düğmesi = dokunmayı bayrak moduna çevirir ·
   bir sayının çevresine o kadar bayrak koyup sayıya dokun = kalan komşuları aç.
+- **Patlayan bölüm:** enkaza döner, içinde hamle yapılamaz, zincirleme açılma içine girmez. Üstündeki
+  **🔧 Onar** düğmesiyle 🪙 harcayıp geri açarsın; bölüm eski haline döner ve patlayan mayın etkisizleşir (bayrak olur).
+- **Para (🪙):** her 5 güvenli kare = 1 🪙. Cüzdan **tüm oyunlar için ortaktır** ve cihazda saklanır
+  (`src/lib/wallet.ts`). Onarım maliyeti = 20 + bölümde açık kare sayısının dörtte biri.
 - **Zorluk:** Kolay %12, Normal %16, Zor %20 mayın. Her zorluk için ayrı rekor tutulur.
 - **İlk dokunuş her zaman güvenli:** çevresindeki 5x5 alanda mayın olmaz, açılış zincirleme genişler.
 - **Kayıt:** oyun otomatik kaydedilir; menüden "Devam et" ile kaldığın yerden sürer.
 
+Ekonomiyi ayarlamak için `src/games/minesweeper/world.ts` başındaki sabitler:
+`CELLS_PER_COIN` (kaç kareye 1 🪙), `REPAIR_BASE_COST` (taban onarım), `REPAIR_COST_PER_REVEALED` (açık kare başına ek maliyet).
+
 Nasıl çalışır (geliştirici notu):
 - Dünya 16x16'lık **bölümlere (chunk)** ayrılır. Mayınlar saklanmaz; bir karenin mayın olup olmadığı
-  (tohum, x, y) üçlüsünden karma ile hesaplanır. Bellekte ve kayıtta yalnızca açılan/bayraklanan kareler tutulur,
-  bu yüzden dünya gerçekten sınırsızdır.
+  (tohum, x, y) üçlüsünden karma ile hesaplanır. Bellekte ve kayıtta yalnızca açılan/bayraklanan kareler ile
+  patlayan bölümler tutulur, bu yüzden dünya gerçekten sınırsızdır.
 - Ekranda yalnızca görünen kareler çizilir; kaydırırken sadece kapsayıcı kayar.
-- `world.ts` oyun mantığı, `geometry.ts` kamera/dokunma matematiği, `persistence.ts` kayıt,
-  `MinesweeperScreen.tsx` arayüz. İlk üçü testlidir.
-- Sıradaki fikirler: günlük görevler, başarımlar, oyun içi para birimi (mantık ve ekran buna göre ayrıştırıldı).
+- `world.ts` oyun mantığı (bölüm kilidi, onarım, para hesabı), `geometry.ts` kamera/dokunma matematiği,
+  `persistence.ts` kayıt, `MinesweeperScreen.tsx` arayüz. Eski (oyunun bittiği sürümden kalma) kayıtlar da yüklenir.
+- Sıradaki fikirler: günlük görevler ve başarımlar (cüzdana ödül verir), bölüm tamamlama ödülü.
 
 ## Müzik
 
@@ -104,6 +112,7 @@ Oyun mantığını (arayüzsüz) denemek için:
 ```bash
 npx tsx src/games/tetris/logic.test.ts
 npx tsx src/lib/volume.test.ts
+npx tsx src/lib/walletCore.test.ts
 npx tsx src/games/minesweeper/world.test.ts
 npx tsx src/games/minesweeper/geometry.test.ts
 ```
@@ -128,7 +137,7 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 - `src/app/` ekranlar (Expo Router): `index.tsx` hub, `game/[id].tsx` seçilen oyun
 - `src/games/types.ts` ortak oyun arayüzü
 - `src/games/registry.ts` tüm oyunların listesi (yeni oyun = yeni klasör + buraya bir kayıt)
-- `src/lib/` ortak altyapı: `storage.ts` (kalıcı kayıt), `settings.ts` (ses/titreşim ayarları), `feedback.ts` (ses + titreşim)
+- `src/lib/` ortak altyapı: `storage.ts` (kalıcı kayıt), `settings.ts` (ses/titreşim ayarları), `feedback.ts` (ses + titreşim), `wallet.ts` + `walletCore.ts` (ortak oyun içi para)
 - `src/components/SettingsPanel.tsx` ortak ayarlar paneli, `VolumeSlider.tsx` ses düzeyi çubuğu
 - `assets/sounds/` ses efektleri ve müzik (kodla üretilmiş `.wav` dosyaları)
 - `tools/make-music.py` Tetris müziği üreticisi
@@ -144,6 +153,7 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
    - [x] Uygulama olarak yükleme (PWA) ve internetsiz çalışma
    - [x] Arka plan müziği (Korobeiniki)
 4. [x] Sonsuz Mayın Tarlası (ilk sürüm: sonsuz dünya, bölümler, kayıt, rekor)
-   - [ ] Günlük görevler, başarımlar, oyun içi para birimi
+   - [x] Mayına basınca yalnızca o bölüm patlar; onarım oyun içi parayla (ortak cüzdan)
+   - [ ] Günlük görevler, başarımlar
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)

@@ -1,5 +1,5 @@
 // Çalıştırma: npx tsx src/games/minesweeper/geometry.test.ts
-import { cellLocalPos, cellToScreen, screenToCell, viewWindow } from './geometry';
+import { cellLocalPos, cellToScreen, chunkScreenRect, screenToCell, viewWindow, visibleRect } from './geometry';
 import type { Size, View } from './geometry';
 
 let passed = 0;
@@ -75,6 +75,40 @@ check('Taban 16\'ya hizalı, kaydırma 0..16 kare arasında', baseAligned);
   check('Orta karenin ekran konumu doğru', Math.abs(cellToScreen(view, size, 0, 0).px - 180) < 1e-9);
   check('Taban negatif tarafta da hizalı', viewWindow({ x: -20.5, y: -3.2, cell: 40 }, size).baseX === -32);
   check('Pencere değerleri sayı', Number.isFinite(w.offX) && Number.isFinite(w.x0));
+}
+
+// Bölüm dikdörtgeni ve görünen kısım
+{
+  const size = { w: 400, h: 800 };
+  const view = { x: 0.5, y: 0.5, cell: 40 };
+  const r = chunkScreenRect(view, size, 0, 0); // bölüm (0,0): kareler 0..15
+  const corner = cellToScreen(view, size, 0, 0);
+  check('Bölüm dikdörtgeni köşesi ilk karenin köşesiyle aynı, boyutu 16 kare', r.left === corner.px && r.top === corner.py && r.width === 640 && r.height === 640);
+
+  const vis = visibleRect(r, size)!;
+  check('Taşan bölümün görünen kısmı ekranla sınırlanır', vis.left === r.left && vis.top === r.top && vis.width === 400 - r.left && vis.height === 800 - r.top);
+
+  const far = chunkScreenRect(view, size, 50, 50);
+  check('Ekran dışındaki bölüm görünmez (null)', visibleRect(far, size) === null);
+  check('Kenara sadece değen bölüm görünmez sayılır', visibleRect({ left: -100, top: 0, width: 100, height: 100 }, size) === null);
+
+  // Rastgele: görünen kısım her zaman ekranın içinde ve bölümün içinde
+  let inside = true;
+  for (let n = 0; n < 500; n++) {
+    const v = { x: (rnd() - 0.5) * 400, y: (rnd() - 0.5) * 400, cell: cells[n % cells.length] };
+    const sz = sizes[n % sizes.length];
+    const cx = Math.floor((rnd() - 0.5) * 30), cy = Math.floor((rnd() - 0.5) * 30);
+    const rect = chunkScreenRect(v, sz, cx, cy);
+    const vr = visibleRect(rect, sz);
+    if (vr) {
+      if (vr.left < 0 || vr.top < 0 || vr.left + vr.width > sz.w + 1e-9 || vr.top + vr.height > sz.h + 1e-9) inside = false;
+      if (vr.left < rect.left - 1e-9 || vr.top < rect.top - 1e-9 || vr.left + vr.width > rect.left + rect.width + 1e-9) inside = false;
+      // görünen kısmın ortasına dokunmak o bölümün karesini vermeli
+      const hit = screenToCell(v, sz, vr.left + vr.width / 2, vr.top + vr.height / 2);
+      if (hit.x >> 4 !== cx || hit.y >> 4 !== cy) inside = false;
+    }
+  }
+  check('Görünen kısım hep ekranın ve bölümün içinde, ortası o bölüme denk gelir', inside);
 }
 
 console.log('\n' + passed + ' kontrol geçti.');

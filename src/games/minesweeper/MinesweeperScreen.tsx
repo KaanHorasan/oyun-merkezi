@@ -1,30 +1,37 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import type { ComponentRef } from 'react';
+import type { ComponentRef, ReactElement } from 'react';
 import { AppState, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SettingsPanel from '@/components/SettingsPanel';
 import { haptic, playSound } from '@/lib/feedback';
 import { useSettings } from '@/lib/settings';
+import { addCoins, flushWallet, getCoins, loadWallet, spendCoins, useWallet } from '@/lib/wallet';
 import type { GameProps } from '../types';
+import { chunkScreenRect, screenToCell, viewWindow, visibleRect } from './geometry';
+import type { Size, View as ViewState } from './geometry';
 import { EMPTY_BEST, clearRun, loadBest, loadRun, restoreWorld, saveBest, saveRun } from './persistence';
 import type { BestScores, SavedRun } from './persistence';
-import { screenToCell, viewWindow } from './geometry';
-import type { Size, View as ViewState } from './geometry';
 import {
+  CELLS_PER_COIN,
+  CHUNK,
   CHUNK_BITS,
   DIFFICULTIES,
   FLAGGED,
   HIDDEN,
   REVEALED,
+  cellState,
   chord,
   chunkKey,
+  coinsDue,
   createWorld,
-  isMine,
+  isLockedAt,
   localIndex,
+  markCoinsGranted,
+  repairCost,
+  repairSection,
   reveal,
   toggleFlag,
-  cellState,
 } from './world';
 import type { Chunk, Difficulty, RevealResult, World } from './world';
 
@@ -35,6 +42,8 @@ const MAX_CELL = 64;
 const DEFAULT_CELL = 40;
 const TAP_SLOP = 8; // px: bundan fazla kayarsa sürükleme sayılır
 const LONG_PRESS_MS = 380;
+const TOAST_MS = 2800;
+const MAX_BADGES = 10;
 
 const C = {
   bg: '#0b0e14',
@@ -45,20 +54,22 @@ const C = {
   accent: '#6366f1',
   text: '#e5e7eb',
   muted: '#8b93a7',
-  chip: 'rgba(20,24,33,0.9)',
+  chip: 'rgba(20,24,33,0.92)',
   danger: '#ef4444',
+  rubble: '#1d1318', // patlayan bölge
+  rubbleBorder: '#6b2d3c',
+  gold: '#facc15',
 };
 const NUMBER_COLORS = ['', '#60a5fa', '#4ade80', '#f87171', '#a78bfa', '#fb923c', '#2dd4bf', '#f472b6', '#cbd5e1'];
 
-// Hücre görünüm kodları: 0..8 = açık sayı, negatifler özel durumlar
+// Hücre görünüm kodları: 1..8 = açık sayı, negatifler/özel değerler diğer durumlar
 const CODE_HIDDEN = -1;
 const CODE_FLAG = -2;
-const CODE_MINE = 9;
 const CODE_EXPLODED = 10;
-const CODE_WRONG_FLAG = 11;
 
 const clampCell = (c: number) => Math.min(MAX_CELL, Math.max(MIN_CELL, c));
 const fmt = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+const chunkOf = (key: number) => ({ cx: Math.floor(key / 1048576) - 524288, cy: (key % 1048576) - 524288 });
 
 // ---------- Tek kare ----------
 
@@ -84,16 +95,9 @@ const BoardCell = memo(function BoardCell({
     color = NUMBER_COLORS[code];
   } else if (code === CODE_FLAG) {
     label = '🚩';
-  } else if (code === CODE_MINE) {
-    bg = '#3a2230';
-    label = '💣';
   } else if (code === CODE_EXPLODED) {
     bg = C.danger;
     label = '💥';
-  } else if (code === CODE_WRONG_FLAG) {
-    bg = '#3a2a2a';
-    label = '✖';
-    color = '#f87171';
   }
   return (
     <View
@@ -129,10 +133,45 @@ function Board({ world, view, size }: { world: World; view: ViewState; size: Siz
   // kapsayıcı kaydırılır, taban ancak bölüm atlanınca değişir. (Formüller geometry.ts'de, testli.)
   const { x0, x1, y0, y1, baseX, baseY, offX, offY } = viewWindow(view, size);
 
-  const over = world.exploded !== null;
-  const cells = [];
+  const cells: ReactElement[] = [];
+
+  // Patlayıp kilitlenen bölümler: tek parça enkaz levhası + patlayan mayının yeri
+  if (world.locked.size > 0) {
+    for (let cy = y0 >> CHUNK_BITS; cy <= y1 >> CHUNK_BITS; cy++) {
+      for (let cx = x0 >> CHUNK_BITS; cx <= x1 >> CHUNK_BITS; cx++) {
+        const hit = world.locked.get(chunkKey(cx, cy));
+        if (!hit) continue;
+        cells.push(
+          <View
+            key={`L${cx},${cy}`}
+            style={{
+              position: 'absolute',
+              left: (cx * CHUNK - baseX) * cell + 1,
+              top: (cy * CHUNK - baseY) * cell + 1,
+              width: CHUNK * cell - 2,
+              height: CHUNK * cell - 2,
+              borderRadius: cell * 0.4,
+              backgroundColor: C.rubble,
+              borderWidth: 1.5,
+              borderColor: C.rubbleBorder,
+            }}
+          />,
+          <BoardCell
+            key={`X${cx},${cy}`}
+            code={CODE_EXPLODED}
+            tint={0}
+            size={cell}
+            left={(hit.x - baseX) * cell}
+            top={(hit.y - baseY) * cell}
+          />,
+        );
+      }
+    }
+  }
+
   let lastKey = -1;
   let chunk: Chunk | undefined;
+  let lockedNow = false;
 
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
@@ -141,8 +180,11 @@ function Board({ world, view, size }: { world: World; view: ViewState; size: Siz
       const key = chunkKey(cx, cy);
       if (key !== lastKey) {
         chunk = world.chunks.get(key);
+        lockedNow = world.locked.size > 0 && world.locked.has(key);
         lastKey = key;
       }
+      if (lockedNow) continue; // enkazın altındaki kareler gösterilmez (onarılınca geri gelir)
+
       const i = localIndex(x, y);
       const st = chunk ? chunk.state[i] : HIDDEN;
 
@@ -151,11 +193,7 @@ function Board({ world, view, size }: { world: World; view: ViewState; size: Siz
         code = chunk!.count[i];
         if (code === 0) continue; // boş açık kare: zemin rengi yeter, çizmeye gerek yok
       } else if (st === FLAGGED) {
-        code = over && !isMine(world, x, y) ? CODE_WRONG_FLAG : CODE_FLAG;
-      } else if (over && world.exploded!.x === x && world.exploded!.y === y) {
-        code = CODE_EXPLODED;
-      } else if (over && isMine(world, x, y)) {
-        code = CODE_MINE;
+        code = CODE_FLAG;
       } else {
         code = CODE_HIDDEN;
       }
@@ -192,11 +230,11 @@ function Board({ world, view, size }: { world: World; view: ViewState; size: Siz
 
 // ---------- Küçük parçalar ----------
 
-function Chip({ label, value }: { label: string; value: string }) {
+function Chip({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <View style={styles.chip}>
       <Text style={styles.chipLabel}>{label}</Text>
-      <Text style={styles.chipValue}>{value}</Text>
+      <Text style={[styles.chipValue, accent ? { color: accent } : null]}>{value}</Text>
     </View>
   );
 }
@@ -214,17 +252,48 @@ function RoundButton({ label, onPress, active = false }: { label: string; onPres
   );
 }
 
+/** Patlayan bölgenin ortasında duran onarım kartı */
+function RepairBadge({
+  x,
+  y,
+  cost,
+  affordable,
+  onPress,
+}: {
+  x: number;
+  y: number;
+  cost: number;
+  affordable: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <View style={[styles.badge, { left: x - 84, top: y - 38 }]}>
+      <Text style={styles.badgeTitle}>💥 Bölge patladı</Text>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [styles.badgeBtn, !affordable && styles.badgeBtnOff, pressed && { opacity: 0.75 }]}
+      >
+        <Text style={[styles.badgeBtnText, !affordable && { color: C.muted }]} selectable={false}>
+          🔧 Onar · {fmt(cost)} 🪙
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 // ---------- Ana ekran ----------
 
 type Phase = 'loading' | 'menu' | 'play';
-type FxKind = 'reveal' | 'cascade' | 'flag' | 'boom';
+type FxKind = 'reveal' | 'cascade' | 'flag' | 'boom' | 'repair' | 'deny';
 
 export default function MinesweeperScreen({ onExit }: GameProps) {
   'use no memo'; // world mutable; her hamlede ver sayacıyla yeniden çizilir
   const [settings] = useSettings();
+  const { coins } = useWallet();
   const [phase, setPhase] = useState<Phase>('loading');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [best, setBest] = useState<BestScores>(EMPTY_BEST);
+  const [runStartBest, setRunStartBest] = useState(0);
   const [savedRun, setSavedRun] = useState<SavedRun | null>(null);
   const [confirmNew, setConfirmNew] = useState(false);
   const [world, setWorld] = useState<World | null>(null);
@@ -232,8 +301,8 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
   const [view, setView] = useState<ViewState>({ x: 0.5, y: 0.5, cell: DEFAULT_CELL });
   const [size, setSize] = useState<Size>({ w: 0, h: 0 });
   const [flagMode, setFlagMode] = useState(false);
-  const [newRecord, setNewRecord] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
 
   // Hareket işleyicileri (PanResponder bir kez oluşur) güncel değerlere ref'ler üzerinden ulaşır
   const worldRef = useRef<World | null>(null);
@@ -243,6 +312,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
   const settingsRef = useRef(settings);
   const bestRef = useRef<BestScores>(EMPTY_BEST);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewportRef = useRef<ComponentRef<typeof View>>(null);
   const actions = useRef({
     tap: (_px: number, _py: number) => {},
@@ -266,10 +336,10 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
     settingsRef.current = settings;
   });
 
-  // Açılışta kayıtlı oyunu ve rekorları yükle
+  // Açılışta kayıtlı oyunu, rekorları ve cüzdanı yükle
   useEffect(() => {
     (async () => {
-      const [b, run] = await Promise.all([loadBest(), loadRun()]);
+      const [b, run] = await Promise.all([loadBest(), loadRun(), loadWallet()]);
       bestRef.current = b;
       setBest(b);
       setSavedRun(run);
@@ -282,8 +352,10 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
   const flushSave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = null;
+    saveBest(bestRef.current);
+    flushWallet();
     const w = worldRef.current;
-    if (!w || w.exploded || w.revealed === 0) return;
+    if (!w || w.revealed === 0) return;
     saveRun(w, viewRef.current);
   }, []);
 
@@ -300,10 +372,11 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
     return () => {
       sub.remove();
       flushSave();
+      if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [flushSave]);
 
-  // ---------- Ses / titreşim ----------
+  // ---------- Ses / titreşim / bildirim ----------
 
   const fx = (kind: FxKind) => {
     const { sound, sfxVolume, vibration } = settingsRef.current;
@@ -311,9 +384,21 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
       if (kind === 'reveal') playSound('rotate', sfxVolume * 0.6);
       else if (kind === 'cascade') playSound('clear', sfxVolume);
       else if (kind === 'flag') playSound('hold', sfxVolume);
-      else playSound('gameover', sfxVolume);
+      else if (kind === 'boom') playSound('lock', sfxVolume);
+      else if (kind === 'repair') playSound('levelup', sfxVolume);
     }
-    if (vibration) haptic(kind === 'boom' ? 'error' : kind === 'cascade' ? 'light' : 'select');
+    if (vibration) {
+      if (kind === 'boom' || kind === 'deny') haptic('error');
+      else if (kind === 'repair') haptic('success');
+      else if (kind === 'cascade' || kind === 'flag') haptic('light');
+      else haptic('select');
+    }
+  };
+
+  const showToast = (text: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), text });
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   };
 
   // ---------- Oyun akışı ----------
@@ -323,8 +408,9 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
     setWorld(w);
     setView(v);
     setVer((n) => n + 1);
-    setNewRecord(false);
+    setRunStartBest(bestRef.current[w.difficulty]);
     setFlagMode(false);
+    setToast(null);
     setPhase('play');
   };
 
@@ -345,40 +431,69 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
       return;
     }
     startRun(w, { ...savedRun.view, cell: clampCell(savedRun.view.cell) });
+    // eski kayıtlarda ve kaydedilmemiş ilerlemede hak edilen para varsa cüzdana ekle
+    grantCoins(w);
   };
 
-  const backToMenu = async () => {
+  const backToMenu = () => {
     flushSave();
     const w = worldRef.current;
     worldRef.current = null;
     setWorld(null);
     setPhase('menu');
     // kayıt yazımı bitince menüdeki "Devam et" kartını güncelle
-    setTimeout(async () => setSavedRun(w && !w.exploded && w.revealed > 0 ? await loadRun() : null), 150);
+    setTimeout(async () => setSavedRun(w && w.revealed > 0 ? await loadRun() : null), 150);
   };
 
-  const finishRun = (w: World) => {
-    clearRun();
-    setSavedRun(null);
-    const score = w.revealed;
-    if (score > bestRef.current[w.difficulty]) {
-      const nb = { ...bestRef.current, [w.difficulty]: score };
-      bestRef.current = nb;
-      setBest(nb);
-      saveBest(nb);
-      setNewRecord(true);
+  /** Açılan karelere göre henüz verilmemiş parayı cüzdana ekler. */
+  const grantCoins = (w: World) => {
+    const due = coinsDue(w);
+    if (due > 0) {
+      addCoins(due);
+      markCoinsGranted(w, due);
+    }
+  };
+
+  const updateBest = (w: World) => {
+    if (w.revealed > bestRef.current[w.difficulty]) {
+      bestRef.current = { ...bestRef.current, [w.difficulty]: w.revealed };
+      setBest(bestRef.current);
     }
   };
 
   const afterMove = (w: World, res: RevealResult) => {
-    if (res.kind === 'mine') {
+    if (res.kind === 'mine' && res.hit) {
       fx('boom');
-      finishRun(w);
+      const cost = repairCost(w, res.hit.x >> CHUNK_BITS, res.hit.y >> CHUNK_BITS);
+      showToast(`💥 Bölge patladı! Onarmak için ${fmt(cost)} 🪙 gerekli`);
     } else if (res.kind === 'safe') {
       fx(res.opened >= 12 ? 'cascade' : 'reveal');
-      scheduleSave();
     }
+    if (res.opened > 0) {
+      grantCoins(w);
+      updateBest(w);
+    }
+    scheduleSave();
     setVer((n) => n + 1);
+  };
+
+  const doRepair = (cx: number, cy: number) => {
+    const w = worldRef.current;
+    if (!w) return;
+    const cost = repairCost(w, cx, cy);
+    if (!spendCoins(cost)) {
+      fx('deny');
+      showToast(`Onarım için ${fmt(cost)} 🪙 gerekli, ${fmt(getCoins())} 🪙 var. Kare açtıkça para kazanırsın.`);
+      return;
+    }
+    if (repairSection(w, cx, cy)) {
+      fx('repair');
+      showToast('🔧 Bölge onarıldı, patlayan mayın etkisizleştirildi');
+      scheduleSave();
+      setVer((n) => n + 1);
+    } else {
+      addCoins(cost); // beklenmeyen durum: parayı iade et
+    }
   };
 
   const worldAt = (px: number, py: number) => screenToCell(viewRef.current, sizeRef.current, px, py);
@@ -395,8 +510,9 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
 
   const doTap = (px: number, py: number) => {
     const w = worldRef.current;
-    if (!w || w.exploded) return;
+    if (!w) return;
     const { x, y } = worldAt(px, py);
+    if (isLockedAt(w, x, y)) return; // patlamış bölge: önce onar
     const st = cellState(w, x, y);
     if (st === REVEALED) afterMove(w, chord(w, x, y));
     else if (flagModeRef.current) doFlag(x, y);
@@ -405,7 +521,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
 
   const doLong = (px: number, py: number) => {
     const w = worldRef.current;
-    if (!w || w.exploded) return;
+    if (!w) return;
     const { x, y } = worldAt(px, py);
     doFlag(x, y);
   };
@@ -533,9 +649,33 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
 
   // ---------- Çizim ----------
 
-  const over = world?.exploded != null;
   const regionX = Math.floor(view.x) >> CHUNK_BITS;
   const regionY = Math.floor(view.y) >> CHUNK_BITS;
+  const newRecord = !!world && runStartBest > 0 && world.revealed > runStartBest;
+
+  // Ekranda görünen patlamış bölgelerin onarım kartları
+  const badges: ReactElement[] = [];
+  if (world && world.locked.size > 0 && size.w > 0 && size.h > 0) {
+    const win = viewWindow(view, size);
+    for (let cy = win.y0 >> CHUNK_BITS; cy <= win.y1 >> CHUNK_BITS && badges.length < MAX_BADGES; cy++) {
+      for (let cx = win.x0 >> CHUNK_BITS; cx <= win.x1 >> CHUNK_BITS && badges.length < MAX_BADGES; cx++) {
+        if (!world.locked.has(chunkKey(cx, cy))) continue;
+        const vis = visibleRect(chunkScreenRect(view, size, cx, cy), size);
+        if (!vis || vis.width < 100 || vis.height < 80) continue;
+        const cost = repairCost(world, cx, cy);
+        badges.push(
+          <RepairBadge
+            key={`B${cx},${cy}`}
+            x={vis.left + vis.width / 2}
+            y={vis.top + vis.height / 2}
+            cost={cost}
+            affordable={coins >= cost}
+            onPress={() => doRepair(cx, cy)}
+          />,
+        );
+      }
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -553,9 +693,14 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
 
       {phase === 'menu' && (
         <ScrollView contentContainerStyle={styles.menu}>
-          <Text style={styles.menuTitle}>Sınırsız bir dünya</Text>
+          <View style={styles.menuTop}>
+            <Text style={styles.menuTitle}>Sınırsız bir dünya</Text>
+            <View style={styles.walletPill}>
+              <Text style={styles.walletText}>🪙 {fmt(coins)}</Text>
+            </View>
+          </View>
           <Text style={styles.menuSub}>
-            Tahta her yöne sonsuza dek uzanır. Mayınlara basmadan ne kadar kare açabilirsin?
+            Tahta her yöne sonsuza dek uzanır. Mayına basarsan oyun bitmez, sadece o bölge patlar. Kare açtıkça kazandığın 🪙 ile onarırsın.
           </Text>
 
           {savedRun && (
@@ -598,7 +743,10 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
               </View>
             </View>
           ) : (
-            <Pressable style={savedRun ? styles.secondary : styles.primary} onPress={() => (savedRun ? setConfirmNew(true) : startNew())}>
+            <Pressable
+              style={savedRun ? styles.secondary : styles.primary}
+              onPress={() => (savedRun ? setConfirmNew(true) : startNew())}
+            >
               <Text style={savedRun ? styles.secondaryText : styles.primaryText}>Yeni oyun başlat</Text>
             </Pressable>
           )}
@@ -612,7 +760,14 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
             <Text style={styles.how}>• Sayı, çevresindeki 8 karedeki mayın sayısıdır.</Text>
             <Text style={styles.how}>• Bir sayının çevresine o kadar bayrak koyup sayıya dokunursan kalan komşular açılır.</Text>
             <Text style={styles.how}>
-              • Sürükle: haritada gez · {Platform.OS === 'web' ? 'Tekerlek' : 'İki parmak'}: yakınlaştır. Her mayın hatasız oyunu bitirir, skorun açtığın kare sayısıdır.
+              • Mayına basarsan o bölge (16×16 kare) patlar ve kilitlenir; oyun devam eder. Bölgenin üstündeki 🔧 Onar düğmesiyle
+              🪙 harcayıp geri açarsın, patlayan mayın da etkisizleşir.
+            </Text>
+            <Text style={styles.how}>
+              • Her {CELLS_PER_COIN} güvenli kare = 1 🪙. Paran tüm oyunlar için ortaktır. Bölgede ne kadar kare açtıysan onarım o kadar pahalıdır.
+            </Text>
+            <Text style={styles.how}>
+              • Sürükle: haritada gez · {Platform.OS === 'web' ? 'Tekerlek' : 'İki parmak'}: yakınlaştır. Skor, açtığın kare sayısıdır.
             </Text>
           </View>
         </ScrollView>
@@ -629,10 +784,18 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
 
           <View style={styles.overlay}>
             <View style={styles.hudTop}>
-              <Chip label="SKOR" value={fmt(world.revealed)} />
-              <Chip label="BAYRAK" value={String(world.flags)} />
+              <Chip label={newRecord ? 'SKOR 🏆' : 'SKOR'} value={fmt(world.revealed)} accent={newRecord ? C.gold : undefined} />
+              <Chip label="PARA" value={`🪙 ${fmt(coins)}`} accent={C.gold} />
               <Chip label="BÖLGE" value={`${regionX}, ${regionY}`} />
             </View>
+
+            {badges}
+
+            {toast && (
+              <View style={styles.toast}>
+                <Text style={styles.toastText}>{toast.text}</Text>
+              </View>
+            )}
 
             <View style={styles.controls}>
               <RoundButton label={flagMode ? '🚩' : '⛏️'} active={flagMode} onPress={() => setFlagMode((f) => !f)} />
@@ -641,38 +804,12 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
               <RoundButton label="⌖" onPress={recenter} />
             </View>
 
-            {world.revealed === 0 && !over && (
+            {world.revealed === 0 && (
               <View style={styles.hint}>
                 <Text style={styles.hintText}>
-                  Başlamak için bir kareye dokun. {Platform.OS === 'web' ? 'Sağ tık: bayrak · Tekerlek: yakınlaştır' : 'Basılı tut: bayrak · İki parmak: yakınlaştır'}
+                  Başlamak için bir kareye dokun. Mayına basarsan sadece o bölge patlar, 🪙 ile onarırsın.{' '}
+                  {Platform.OS === 'web' ? 'Sağ tık: bayrak · Tekerlek: yakınlaştır' : 'Basılı tut: bayrak · İki parmak: yakınlaştır'}
                 </Text>
-              </View>
-            )}
-
-            {over && (
-              <View style={styles.overBox}>
-                <View style={styles.overCard}>
-                  <Text style={styles.overTitle}>Mayına bastın 💥</Text>
-                  <Text style={styles.overScore}>{fmt(world.revealed)} kare</Text>
-                  <Text style={styles.overSub}>
-                    {newRecord ? '🏆 Yeni rekor!' : `Rekor: ${fmt(best[world.difficulty])}`}
-                  </Text>
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-                    <Pressable style={[styles.secondary, { flex: 1 }]} onPress={backToMenu}>
-                      <Text style={styles.secondaryText}>Menü</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.primary, { flex: 1, marginTop: 0 }]}
-                      onPress={() => {
-                        const seed = Math.floor(Math.random() * 4294967296);
-                        startRun(createWorld(seed, world.difficulty), { x: 0.5, y: 0.5, cell: view.cell });
-                      }}
-                    >
-                      <Text style={styles.primaryText}>Yeni oyun</Text>
-                    </Pressable>
-                  </View>
-                  <Text style={styles.overHint}>Haritayı gezip mayınların yerlerine bakabilirsin.</Text>
-                </View>
               </View>
             )}
           </View>
@@ -695,7 +832,10 @@ const styles = StyleSheet.create({
 
   // Menü
   menu: { padding: 20, gap: 14, paddingBottom: 40 },
-  menuTitle: { color: '#fff', fontSize: 30, fontWeight: '800' },
+  menuTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  menuTitle: { color: '#fff', fontSize: 30, fontWeight: '800', flexShrink: 1 },
+  walletPill: { backgroundColor: '#232a3b', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  walletText: { color: C.gold, fontSize: 16, fontWeight: '800' },
   menuSub: { color: C.muted, fontSize: 15, lineHeight: 21 },
   sectionLabel: { color: C.muted, fontSize: 12, letterSpacing: 1.2, marginTop: 6 },
   card: { backgroundColor: '#161b27', borderRadius: 16, padding: 16, gap: 6 },
@@ -726,10 +866,11 @@ const styles = StyleSheet.create({
   roundText: { color: '#fff', fontSize: 20 },
   hint: { position: 'absolute', left: 16, right: 80, bottom: 20, backgroundColor: C.chip, borderRadius: 14, padding: 12, pointerEvents: 'none' },
   hintText: { color: '#d1d5db', fontSize: 13, lineHeight: 18 },
-  overBox: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, pointerEvents: 'box-none' },
-  overCard: { backgroundColor: '#161b27', borderRadius: 20, padding: 18, alignItems: 'center' },
-  overTitle: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  overScore: { color: '#a5b4fc', fontSize: 34, fontWeight: '800', marginTop: 4 },
-  overSub: { color: '#facc15', fontSize: 15, marginTop: 2 },
-  overHint: { color: C.muted, fontSize: 12, marginTop: 10 },
+  toast: { position: 'absolute', top: 66, left: 16, right: 16, backgroundColor: C.chip, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#2f3750', pointerEvents: 'none' },
+  toastText: { color: '#f3f4f6', fontSize: 14, lineHeight: 19, textAlign: 'center' },
+  badge: { position: 'absolute', width: 168, backgroundColor: C.chip, borderRadius: 16, padding: 10, gap: 8, alignItems: 'center', borderWidth: 1, borderColor: C.rubbleBorder },
+  badgeTitle: { color: '#fecaca', fontSize: 13, fontWeight: '700' },
+  badgeBtn: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12, alignSelf: 'stretch', alignItems: 'center' },
+  badgeBtnOff: { backgroundColor: '#2a3040' },
+  badgeBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

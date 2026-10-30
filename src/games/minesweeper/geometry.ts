@@ -1,7 +1,7 @@
 // Kamera/ekran geometrisi. Çizim (Board) ile dokunma eşlemesi (ekran -> kare) AYNI formülleri
 // kullanır; böylece dokunduğun yer ile çizilen kare asla kaymaz.
 
-import { CHUNK_BITS } from './world';
+import { CHUNK, CHUNK_BITS } from './world';
 
 /** view.x/y: ekranın ortasına denk gelen dünya koordinatı (kare birimi, kesirli); view.cell: bir karenin piksel boyu */
 export type View = { x: number; y: number; cell: number };
@@ -58,4 +58,22 @@ export function cellToScreen(view: View, size: Size, x: number, y: number) {
     px: (x - view.x) * view.cell + size.w / 2,
     py: (y - view.y) * view.cell + size.h / 2,
   };
+}
+
+export type Rect = { left: number; top: number; width: number; height: number };
+
+/** Bir bölümün (chunk) ekrandaki dikdörtgeni (görünüm alanına göre piksel; ekran dışına taşabilir) */
+export function chunkScreenRect(view: View, size: Size, cx: number, cy: number): Rect {
+  const p = cellToScreen(view, size, cx * CHUNK, cy * CHUNK);
+  return { left: p.px, top: p.py, width: CHUNK * view.cell, height: CHUNK * view.cell };
+}
+
+/** Dikdörtgenin ekranda görünen kısmı; hiç görünmüyorsa null. (Onar düğmesi hep görünen kısmın ortasına konur.) */
+export function visibleRect(rect: Rect, size: Size): Rect | null {
+  const left = Math.max(0, rect.left);
+  const top = Math.max(0, rect.top);
+  const right = Math.min(size.w, rect.left + rect.width);
+  const bottom = Math.min(size.h, rect.top + rect.height);
+  if (right <= left || bottom <= top) return null;
+  return { left, top, width: right - left, height: bottom - top };
 }
