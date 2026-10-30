@@ -501,7 +501,19 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
   const doFlag = (x: number, y: number) => {
     const w = worldRef.current;
     if (!w) return;
-    if (toggleFlag(w, x, y) !== 'none') {
+    if (!w.safe) {
+      // mayınlar ilk açılışla kesinleşir; öncesinde bayrak koymanın anlamı yok
+      showToast('Bayrak koymak için önce bir kare aç');
+      return;
+    }
+    const res = toggleFlag(w, x, y);
+    if (res === 'boom') {
+      fx('boom');
+      const cost = repairCost(w, x >> CHUNK_BITS, y >> CHUNK_BITS);
+      showToast(`💥 Yanlış bayrak! Orada mayın yoktu, bölge patladı. Onarım ${fmt(cost)} 🪙`);
+      scheduleSave();
+      setVer((n) => n + 1);
+    } else if (res !== 'none') {
       fx('flag');
       scheduleSave();
       setVer((n) => n + 1);
@@ -756,12 +768,13 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
             <Text style={styles.how}>• Dokun: kareyi aç. İlk dokunuş her zaman güvenlidir.</Text>
             <Text style={styles.how}>
               • {Platform.OS === 'web' ? 'Sağ tık veya basılı tut' : 'Basılı tut'}: bayrak koy / kaldır (🚩 düğmesiyle de olur).
+              Bayrak, "burada mayın var" iddiasıdır: mayın olmayan yere bayrak koyarsan o bölge patlar. Emin değilsen koyma!
             </Text>
             <Text style={styles.how}>• Sayı, çevresindeki 8 karedeki mayın sayısıdır.</Text>
             <Text style={styles.how}>• Bir sayının çevresine o kadar bayrak koyup sayıya dokunursan kalan komşular açılır.</Text>
             <Text style={styles.how}>
-              • Mayına basarsan o bölge (16×16 kare) patlar ve kilitlenir; oyun devam eder. Bölgenin üstündeki 🔧 Onar düğmesiyle
-              🪙 harcayıp geri açarsın, patlayan mayın da etkisizleşir.
+              • Mayına basarsan ya da yanlış bayrak koyarsan o bölge (16×16 kare) patlar ve kilitlenir; oyun devam eder.
+              Bölgenin üstündeki 🔧 Onar düğmesiyle 🪙 harcayıp geri açarsın.
             </Text>
             <Text style={styles.how}>
               • Her {CELLS_PER_COIN} güvenli kare = 1 🪙. Paran tüm oyunlar için ortaktır. Bölgede ne kadar kare açtıysan onarım o kadar pahalıdır.
@@ -807,7 +820,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
             {world.revealed === 0 && (
               <View style={styles.hint}>
                 <Text style={styles.hintText}>
-                  Başlamak için bir kareye dokun. Mayına basarsan sadece o bölge patlar, 🪙 ile onarırsın.{' '}
+                  Başlamak için bir kareye dokun. Mayına basarsan ya da yanlış bayrak koyarsan o bölge patlar, 🪙 ile onarırsın.{' '}
                   {Platform.OS === 'web' ? 'Sağ tık: bayrak · Tekerlek: yakınlaştır' : 'Basılı tut: bayrak · İki parmak: yakınlaştır'}
                 </Text>
               </View>

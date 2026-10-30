@@ -204,19 +204,35 @@ export function reveal(world: World, x: number, y: number): RevealResult {
   return { kind: 'safe', opened: openFrom(world, x, y) };
 }
 
-export function toggleFlag(world: World, x: number, y: number): 'flagged' | 'unflagged' | 'none' {
+/**
+ * Bayrak, "burada mayın var" iddiasıdır:
+ *  - Gerçekten mayınsa bayrak güvenle konur.
+ *  - Mayın değilse yanlış iddia: o bölüm, mayına basılmış gibi patlar ('boom') ve kilitlenir.
+ *  - Bayrağı kaldırmak serbesttir (bayraklar hep doğru olduğu için).
+ * Oyun başlamadan (ilk açılıştan önce) bayrak konamaz; mayınlar ilk açılışla kesinleşir.
+ */
+export function toggleFlag(world: World, x: number, y: number): 'flagged' | 'unflagged' | 'boom' | 'none' {
   if (isLockedAt(world, x, y)) return 'none';
   const st = cellState(world, x, y);
   if (st === REVEALED) return 'none';
-  const chunk = ensureChunk(world, x >> CHUNK_BITS, y >> CHUNK_BITS);
-  const i = localIndex(x, y);
-  world.version++;
+  if (st === HIDDEN && !world.safe) return 'none';
+
   if (st === FLAGGED) {
-    chunk.state[i] = HIDDEN;
+    const chunk = ensureChunk(world, x >> CHUNK_BITS, y >> CHUNK_BITS);
+    chunk.state[localIndex(x, y)] = HIDDEN;
     world.flags--;
+    world.version++;
     return 'unflagged';
   }
-  chunk.state[i] = FLAGGED;
+
+  world.version++;
+  if (!isMine(world, x, y)) {
+    world.locked.set(chunkKey(x >> CHUNK_BITS, y >> CHUNK_BITS), { x, y });
+    world.explosions++;
+    return 'boom';
+  }
+  const chunk = ensureChunk(world, x >> CHUNK_BITS, y >> CHUNK_BITS);
+  chunk.state[localIndex(x, y)] = FLAGGED;
   world.flags++;
   return 'flagged';
 }
@@ -265,7 +281,7 @@ export function repairCost(world: World, cx: number, cy: number): number {
 }
 
 /**
- * Bölümü tekrar oynanabilir yapar ve patlayan mayını etkisizleştirir (bayrak olur).
+ * Bölümü tekrar oynanabilir yapar; patlayan mayını etkisizleştirir (bayrak olur).
  * Ödemeyi çağıran taraf yapar (cüzdan oyundan bağımsızdır). Bölüm kilitli değilse false döner.
  */
 export function repairSection(world: World, cx: number, cy: number): boolean {
@@ -274,7 +290,8 @@ export function repairSection(world: World, cx: number, cy: number): boolean {
   if (!hit) return false;
   const chunk = ensureChunk(world, cx, cy);
   const i = localIndex(hit.x, hit.y);
-  if (chunk.state[i] === HIDDEN) {
+  // Basılan bir mayınsa etkisizleştirilir (bayrak olur). Yanlış bayrak yüzünden patladıysa kare olduğu gibi (kapalı) kalır.
+  if (isMine(world, hit.x, hit.y) && chunk.state[i] === HIDDEN) {
     chunk.state[i] = FLAGGED;
     world.flags++;
   }

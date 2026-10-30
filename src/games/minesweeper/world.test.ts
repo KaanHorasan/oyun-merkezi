@@ -13,6 +13,27 @@ function check(name: string, ok: boolean) {
   console.log('✓ ' + name);
 }
 
+/** (x0,y0)'dan başlayıp ilk uygun kapalı kareyi bulur: wantMine=true mayınlı, false mayınsız */
+function findCell(w: World, wantMine: boolean, x0: number, y0: number): [number, number] {
+  for (let dy = 0; dy < 120; dy++) for (let dx = 0; dx < 120; dx++) {
+    const x = x0 + dx, y = y0 + dy;
+    if (isMine(w, x, y) === wantMine && cellState(w, x, y) === HIDDEN && !isLockedAt(w, x, y)) return [x, y];
+  }
+  throw new Error('uygun kare bulunamadı');
+}
+
+/** Eski kayıtlardan kalabilecek YANLIŞ bayrağı doğrudan yerleştirir (artık oyunda koyulamaz) */
+function forceFlag(w: World, x: number, y: number) {
+  const key = chunkKey(x >> 4, y >> 4);
+  let ch = w.chunks.get(key);
+  if (!ch) {
+    ch = { state: new Uint8Array(256), count: new Uint8Array(256) };
+    w.chunks.set(key, ch);
+  }
+  ch.state[((y & 15) << 4) | (x & 15)] = FLAGGED;
+  w.flags++;
+}
+
 // 1) Mayın yoğunluğu istenen orana yakın olmalı (hepsi için)
 for (const diff of ['easy', 'normal', 'hard'] as Difficulty[]) {
   const w = createWorld(12345, diff);
@@ -170,15 +191,41 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
   check('Dışarıdaki sayılara dokunmak kilitli bölüme sızmaz', !leaked);
 }
 
-// 8) Bayrak
+// 8) Bayrak = "burada mayın var" iddiası; yanlışsa o bölüm patlar
 {
   const w = createWorld(8, 'normal');
-  check('Bayrak koyulur', toggleFlag(w, 10, 10) === 'flagged' && cellState(w, 10, 10) === FLAGGED && w.flags === 1);
-  check('Bayraklı kare açılmaz', reveal(w, 10, 10).kind === 'none' && cellState(w, 10, 10) === FLAGGED);
-  check('Bayrak kaldırılır', toggleFlag(w, 10, 10) === 'unflagged' && cellState(w, 10, 10) === HIDDEN && w.flags === 0);
+  check('Oyun başlamadan bayrak konmaz', toggleFlag(w, 10, 10) === 'none' && w.flags === 0);
   reveal(w, 0, 0);
+
+  const [mx, my] = findCell(w, true, 10, 10);
+  check('Mayın olan yere bayrak güvenle konur', toggleFlag(w, mx, my) === 'flagged' && cellState(w, mx, my) === FLAGGED && w.flags === 1 && w.locked.size === 0);
+  check('Bayraklı kare açılmaz', reveal(w, mx, my).kind === 'none' && cellState(w, mx, my) === FLAGGED);
+  check('Bayrak kaldırılır', toggleFlag(w, mx, my) === 'unflagged' && cellState(w, mx, my) === HIDDEN && w.flags === 0);
+
+  const [sx, sy] = findCell(w, false, 10, 10);
+  const before = w.explosions;
+  check('Mayın olmayan yere bayrak koymak bölümü patlatır', toggleFlag(w, sx, sy) === 'boom' && isLockedAt(w, sx, sy) && w.explosions === before + 1);
+  check('Patlayan bölümde yanlış bayrağın konumu kaydedilir', w.locked.get(chunkKey(sx >> 4, sy >> 4))?.x === sx && w.locked.get(chunkKey(sx >> 4, sy >> 4))?.y === sy);
+  check('Yanlış bayrak kalıcı bayrak olmaz, bayrak sayısı artmaz', cellState(w, sx, sy) === HIDDEN && w.flags === 0);
+  check('Patlayan bölümde bir daha bayrak konamaz', toggleFlag(w, sx, sy) === 'none');
   check('Açık kareye bayrak konmaz', toggleFlag(w, 0, 0) === 'none');
-  check('Negatif koordinatta bayrak', toggleFlag(w, -17, -33) === 'flagged' && cellState(w, -17, -33) === FLAGGED);
+
+  const [nx, ny] = findCell(w, true, -60, -60);
+  check('Negatif koordinatta mayına bayrak', toggleFlag(w, nx, ny) === 'flagged' && cellState(w, nx, ny) === FLAGGED);
+
+  // Bayrak oyunu bedava ipucuna çevirmemeli: iddia yanlışsa da doğruysa da sonuç tam olarak mayın durumuna bağlı
+  let consistent = true;
+  const w2 = createWorld(77, 'normal');
+  reveal(w2, 0, 0);
+  for (let i = 0; i < 300; i++) {
+    const x = 5 + (i * 7) % 90, y = -50 + (i * 13) % 90;
+    if (cellState(w2, x, y) !== HIDDEN || isLockedAt(w2, x, y)) continue;
+    const mine = isMine(w2, x, y);
+    const res = toggleFlag(w2, x, y);
+    if (mine && res !== 'flagged') consistent = false;
+    if (!mine && res !== 'boom') consistent = false;
+  }
+  check('Bayrak sonucu tam olarak mayın durumuna bağlı (mayın: bayrak, değil: patlama)', consistent && w2.explosions > 0 && w2.flags > 0);
 }
 
 // 9) Chord (açık sayıya dokunma)
@@ -220,7 +267,7 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
         if (isMine(w2, x + dx, y + dy)) hasMine = true;
         else if (!wrongSpot) wrongSpot = [x + dx, y + dy];
       }
-      if (hasMine && wrongSpot) { t2 = [x, y]; toggleFlag(w2, wrongSpot[0], wrongSpot[1]); break outer2; }
+      if (hasMine && wrongSpot) { t2 = [x, y]; forceFlag(w2, wrongSpot[0], wrongSpot[1]); break outer2; }
     }
   }
   check('Yanlış bayrak senaryosu bulundu', t2 !== null);
@@ -242,8 +289,10 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
 {
   const w = createWorld(4242, 'normal');
   reveal(w, 7, 7);
-  toggleFlag(w, 40, 40);
-  toggleFlag(w, -40, 25);
+  const m1 = findCell(w, true, 40, 40);
+  const m2 = findCell(w, true, -70, 25);
+  toggleFlag(w, m1[0], m1[1]);
+  toggleFlag(w, m2[0], m2[1]);
   reveal(w, -60, 90);
   // gerçek bir patlama üret
   let mx = 0, my = 0, found = false;
@@ -262,7 +311,7 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
   check('Yüklenen dünya birebir aynı (durum, sayılar, skor, bayraklar)', same);
   check('Güvenli bölge korunuyor', w2!.safe?.x === 7 && w2!.safe?.y === 7);
   check('Kilitli bölümler, patlama sayısı ve verilmiş para korunuyor',
-    w2!.locked.size === w.locked.size && isLockedAt(w2!, mx, my) && w2!.explosions === 1 && w2!.coinsGranted === 17 &&
+    w2!.locked.size === w.locked.size && isLockedAt(w2!, mx, my) && w2!.explosions === w.explosions && w.explosions >= 1 && w2!.coinsGranted === 17 &&
     w2!.locked.get(chunkKey(mx >> 4, my >> 4))?.x === mx);
   check('Bozuk veri reddedilir', importWorld({ ...data, v: 9 }) === null && importWorld({ ...data, chunks: { '0,0': 'zz' } }) === null && importWorld(null as never) === null);
   check('Mayın yanlış bölüme ait kilit reddedilir', importWorld({ ...data, locked: { '0,0': { x: 500, y: 500 } } }) === null);
@@ -303,6 +352,19 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
   check('İkinci onarım işe yaramaz', repairSection(w, cx, cy) === false);
 }
 
+// 11d) Yanlış bayrak yüzünden patlayan bölümün onarımı
+{
+  const w = createWorld(31, 'normal');
+  reveal(w, 0, 0);
+  const [sx, sy] = findCell(w, false, 12, 12);
+  const flagsBefore = w.flags;
+  check('Yanlış bayrak bölümü patlatır', toggleFlag(w, sx, sy) === 'boom');
+  const cx = sx >> 4, cy = sy >> 4;
+  check('Onarım yanlış bayraklı bölümü açar', repairSection(w, cx, cy) === true && !isLockedAt(w, sx, sy));
+  check('Yanlış bayraklı kare olduğu gibi kapalı kalır, bayrak sayısı değişmez', cellState(w, sx, sy) === HIDDEN && w.flags === flagsBefore);
+  check('Onarım sonrası o güvenli kare açılabilir', reveal(w, sx, sy).kind === 'safe');
+}
+
 // 11c) Para hesabı
 {
   const w = createWorld(1, 'easy');
@@ -320,7 +382,7 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
 {
   const w: World = createWorld(909, 'normal');
   reveal(w, 0, 0);
-  let steps = 0, blocked = 0, boomed = 0, repaired = 0;
+  let steps = 0, blocked = 0, boomed = 0, repaired = 0, flagBooms = 0;
   let seed = 1;
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
   let ok = true;
@@ -339,7 +401,10 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
       const cy = (key % 1048576) - 524288;
       if (repairSection(w, cx, cy)) repaired++;
     } else if (roll < 0.1) {
-      toggleFlag(w, x, y);
+      const wasMine = isMine(w, x, y);
+      const res = toggleFlag(w, x, y);
+      if (res === 'boom') { flagBooms++; if (wasMine) ok = false; } // yalnızca mayın OLMAYAN yer patlatır
+      if (res === 'flagged' && !wasMine) ok = false;
     } else if (!isMine(w, x, y)) {
       const r = reveal(w, x, y);
       if (locked && r.kind !== 'none') ok = false; // kilitli bölüm asla değişmemeli
@@ -352,10 +417,10 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
   for (let y = -160; y < 160; y++) for (let x = -160; x < 160; x++) {
     const st = cellState(w, x, y);
     if (st === REVEALED) { counted++; if (isMine(w, x, y)) consistent = false; }
-    if (st === FLAGGED) flagged++;
+    if (st === FLAGGED) { flagged++; if (!isMine(w, x, y)) consistent = false; } // bayraklar hep doğru
   }
-  check(`Uzun oyun (${steps} hamle, ${boomed} patlama, ${repaired} onarım, ${w.revealed} açık kare): tutarlı`,
-    ok && consistent && counted <= w.revealed && w.explosions >= boomed && flagged <= w.flags && w.locked.size <= w.explosions);
+  check(`Uzun oyun (${steps} hamle, ${boomed} mayın + ${flagBooms} yanlış bayrak patlaması, ${repaired} onarım, ${w.revealed} açık kare): tutarlı`,
+    ok && consistent && counted <= w.revealed && w.explosions >= boomed + flagBooms && flagged <= w.flags && w.locked.size <= w.explosions);
   check(`Kilitli bölümlere yapılan ${blocked} hamle hiçbir şeyi değiştirmedi`, ok);
 }
 

@@ -45,14 +45,16 @@ Bundan sonra her `git push` siteyi otomatik günceller.
 
 ## Sonsuz Mayın Tarlası
 
-Her yöne sonsuza uzanan bir mayın tarlası. **Oyun bitmez**: mayına basarsan sadece o bölüm (16×16 kare) patlar ve kilitlenir.
+Her yöne sonsuza uzanan bir mayın tarlası. **Oyun bitmez**: mayına basarsan ya da yanlış bayrak koyarsan sadece o bölüm (16×16 kare) patlar ve kilitlenir.
 Bölümü oyun içi parayla onarırsın. Skor, açtığın güvenli kare sayısıdır.
 
 - **Kontroller:** dokun = aç · basılı tut (web'de sağ tık) = bayrak · sürükle = haritada gez ·
   iki parmak (web'de tekerlek) = yakınlaştır · 🚩/⛏️ düğmesi = dokunmayı bayrak moduna çevirir ·
   bir sayının çevresine o kadar bayrak koyup sayıya dokun = kalan komşuları aç.
+- **Bayrak bir iddiadır:** bayrak, "burada mayın var" demektir. Mayın olan yere güvenle konur; mayın olmayan yere koyarsan
+  o bölüm patlar (mayına basmakla aynı sonuç). Bayrağı kaldırmak serbesttir. Oyun başlamadan (ilk açılıştan önce) bayrak konamaz.
 - **Patlayan bölüm:** enkaza döner, içinde hamle yapılamaz, zincirleme açılma içine girmez. Üstündeki
-  **🔧 Onar** düğmesiyle 🪙 harcayıp geri açarsın; bölüm eski haline döner ve patlayan mayın etkisizleşir (bayrak olur).
+  **🔧 Onar** düğmesiyle 🪙 harcayıp geri açarsın; bölüm eski haline döner; mayına basıldıysa o mayın etkisizleşir (bayrak olur), yanlış bayrak yüzünden patladıysa kare olduğu gibi kapalı kalır.
 - **Para (🪙):** her 5 güvenli kare = 1 🪙. Cüzdan **tüm oyunlar için ortaktır** ve cihazda saklanır
   (`src/lib/wallet.ts`). Onarım maliyeti = 20 + bölümde açık kare sayısının dörtte biri.
 - **Zorluk:** Kolay %12, Normal %16, Zor %20 mayın. Her zorluk için ayrı rekor tutulur.
