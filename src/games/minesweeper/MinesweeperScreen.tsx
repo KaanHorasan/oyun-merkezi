@@ -9,7 +9,7 @@ import { flushProgress, record } from '@/lib/progress/progress';
 import { useSettings } from '@/lib/settings';
 import { addCoins, flushWallet, getCoins, loadWallet, spendCoins, useWallet } from '@/lib/wallet';
 import type { GameProps } from '../types';
-import { chunkScreenRect, screenToCell, viewWindow, visibleRect } from './geometry';
+import { chunkScreenRect, panCamera, screenToCell, viewWindow, visibleRect } from './geometry';
 import type { Size, View as ViewState } from './geometry';
 import { EMPTY_BEST, clearRun, loadBest, loadRun, restoreWorld, saveBest, saveRun } from './persistence';
 import type { BestScores, SavedRun } from './persistence';
@@ -307,6 +307,8 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
 
   // Hareket işleyicileri (PanResponder bir kez oluşur) güncel değerlere ref'ler üzerinden ulaşır
   const worldRef = useRef<World | null>(null);
+  // Kameranın TEK doğru kaynağı bu ref'tir: her değişiklik önce buraya yazılır, sonra ekran state'ine yansır.
+  // (Ekran yenilenince ref'e kopyalamak, hızlı arka arkaya sürüklemelerde eski konumdan başlamaya yol açıyordu.)
   const viewRef = useRef(view);
   const sizeRef = useRef(size);
   const flagModeRef = useRef(flagMode);
@@ -330,8 +332,13 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
     timer: null as ReturnType<typeof setTimeout> | null,
   });
 
+  const applyView = useCallback((fn: (v: ViewState) => ViewState) => {
+    const next = fn(viewRef.current);
+    viewRef.current = next;
+    setView(next);
+  }, []);
+
   useEffect(() => {
-    viewRef.current = view;
     sizeRef.current = size;
     flagModeRef.current = flagMode;
     settingsRef.current = settings;
@@ -408,7 +415,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
   const startRun = (w: World, v: ViewState) => {
     worldRef.current = w;
     setWorld(w);
-    setView(v);
+    applyView(() => v);
     setVer((n) => n + 1);
     setRunStartBest(bestRef.current[w.difficulty]);
     setFlagMode(false);
@@ -599,7 +606,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
             g.pinchCell = viewRef.current.cell;
           } else if (g.pinchDist > 0) {
             const cell = clampCell((g.pinchCell * d) / g.pinchDist);
-            setView((v) => ({ ...v, cell }));
+            applyView((v) => ({ ...v, cell }));
           }
           return;
         }
@@ -609,8 +616,10 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
           clearTimer();
         }
         if (g.mode === 'pan') {
-          const s = g.startView;
-          setView((v) => ({ ...v, x: s.x - gs.dx / v.cell, y: s.y - gs.dy / v.cell }));
+          // DİKKAT: gs (gestureState) tek bir nesnedir ve parmak kalkınca sıfırlanır. dx/dy burada, olay anında
+          // okunmalı; güncelleme fonksiyonunun içinde okunursa (React sonra çalıştırırsa) 0 görülür ve kamera geri atlar.
+          const { x, y } = panCamera(g.startView, gs.dx, gs.dy);
+          applyView((v) => ({ ...v, x, y }));
         }
       },
       onPanResponderRelease: () => {
@@ -629,10 +638,10 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
 
   const zoomBy = useCallback(
     (factor: number) => {
-      setView((v) => ({ ...v, cell: clampCell(v.cell * factor) }));
+      applyView((v) => ({ ...v, cell: clampCell(v.cell * factor) }));
       scheduleSave();
     },
-    [scheduleSave],
+    [applyView, scheduleSave],
   );
 
   // Web: fare tekerleği ile yakınlaştırma, sağ tık ile bayrak
@@ -665,7 +674,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
   const recenter = () => {
     const w = worldRef.current;
     const c = w?.safe ?? { x: 0, y: 0 };
-    setView((v) => ({ ...v, x: c.x + 0.5, y: c.y + 0.5 }));
+    applyView((v) => ({ ...v, x: c.x + 0.5, y: c.y + 0.5 }));
     scheduleSave();
   };
 

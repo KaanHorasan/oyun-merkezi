@@ -1,5 +1,5 @@
 // Çalıştırma: npx tsx src/games/minesweeper/geometry.test.ts
-import { cellLocalPos, cellToScreen, chunkScreenRect, screenToCell, viewWindow, visibleRect } from './geometry';
+import { cellLocalPos, cellToScreen, chunkScreenRect, panCamera, screenToCell, viewWindow, visibleRect } from './geometry';
 import type { Size, View } from './geometry';
 
 let passed = 0;
@@ -109,6 +109,33 @@ check('Taban 16\'ya hizalı, kaydırma 0..16 kare arasında', baseAligned);
     }
   }
   check('Görünen kısım hep ekranın ve bölümün içinde, ortası o bölüme denk gelir', inside);
+}
+
+// Sürükleme (kamera kaydırma)
+{
+  const start = { x: 100, y: 100, cell: 40 };
+  const p = panCamera(start, -200, -120);
+  check('Parmak sola/yukarı kayınca kamera sağa/aşağı gider (200px/40 = 5 kare, 120px = 3 kare)', p.x === 105 && p.y === 103);
+  check('Hareket yoksa kamera yerinde kalır', panCamera(start, 0, 0).x === 100 && panCamera(start, 0, 0).y === 100);
+  check('Zoom\'a göre ölçeklenir (cell 20: 200px = 10 kare)', panCamera({ x: 0, y: 0, cell: 20 }, -200, 0).x === 10);
+
+  // Parmağın altındaki dünya noktası sürükleme boyunca aynı kalmalı (rastgele durumlar, negatif/uzak koordinatlar dahil)
+  let sticks = true;
+  for (let n = 0; n < 500; n++) {
+    const sz = sizes[n % sizes.length];
+    const v = { x: (rnd() - 0.5) * 1_000_000, y: (rnd() - 0.5) * 1_000_000, cell: cells[n % cells.length] };
+    const fx = Math.floor((rnd() - 0.5) * 50) + Math.round(v.x), fy = Math.floor((rnd() - 0.5) * 50) + Math.round(v.y);
+    const dx = (rnd() - 0.5) * 600, dy = (rnd() - 0.5) * 600;
+    const before = cellToScreen(v, sz, fx, fy);
+    const moved = { ...v, ...panCamera(v, dx, dy) };
+    const after = cellToScreen(moved, sz, fx, fy);
+    if (Math.abs(after.px - (before.px + dx)) > 1e-6 || Math.abs(after.py - (before.py + dy)) > 1e-6) sticks = false;
+  }
+  check('Sürüklerken kare, parmakla birlikte aynı miktarda hareket eder (kayma/geri atlama yok)', sticks);
+
+  // Aynı başlangıçtan art arda hesaplananlar kendi içinde tutarlı: son konum yalnızca son dx/dy'ye bağlı
+  const a = panCamera(start, -50, 0), b = panCamera(start, -200, 0);
+  check('Konum her zaman sürükleme BAŞLANGICINA göre hesaplanır (ara değerlerden bağımsız)', b.x === 105 && a.x === 101.25);
 }
 
 console.log('\n' + passed + ' kontrol geçti.');

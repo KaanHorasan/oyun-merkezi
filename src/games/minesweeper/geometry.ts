@@ -77,3 +77,11 @@ export function visibleRect(rect: Rect, size: Size): Rect | null {
   if (right <= left || bottom <= top) return null;
   return { left, top, width: right - left, height: bottom - top };
 }
+
+/**
+ * Sürükleme: parmak (dx, dy) piksel kaydıysa kamera, sürükleme BAŞLANGICINDAKİ konumundan ters yönde o kadar kayar.
+ * Parmağın altındaki dünya noktası sürükleme boyunca aynı kalır.
+ */
+export function panCamera(start: View, dx: number, dy: number): { x: number; y: number } {
+  return { x: start.x - dx / start.cell, y: start.y - dy / start.cell };
+}

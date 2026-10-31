@@ -184,5 +184,6 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 4. [x] Sonsuz Mayın Tarlası (ilk sürüm: sonsuz dünya, bölümler, kayıt, rekor)
    - [x] Mayına basınca yalnızca o bölüm patlar; onarım oyun içi parayla (ortak cüzdan)
    - [x] Günlük görevler ve başarımlar (ortak cüzdana ödül)
+5. [ ] Satranç (plan: `docs/satranc-plani.md`)
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)
