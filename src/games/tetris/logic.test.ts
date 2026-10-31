@@ -198,4 +198,31 @@ function check(name: string, ok: boolean) {
   check('Hold: doğacak yer doluysa oyun biter', after.gameOver && after.event?.kind === 'gameover');
 }
 
+// 15) Kesin sayaçlar: kilitlenen parça ve 4'lü temizleme (görev/başarım takibi bunlara dayanır)
+{
+  let s: GameState = newGame();
+  check('Başlangıçta sayaçlar sıfır', s.pieces === 0 && s.tetrises === 0);
+  s = hardDrop(s);
+  check('Parça kilitlenince sayaç artar', s.pieces === 1 && s.tetrises === 0);
+  s = hardDrop(s);
+  check('Her kilitlenmede bir artar', s.pieces === 2);
+
+  // 4 satır birden: tetrises artar, 1-3 satırda artmaz
+  let t: GameState = newGame();
+  for (let r = ROWS - 4; r < ROWS; r++) t.board[r] = [0, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+  t = hardDrop({ ...t, current: { ...spawnPiece('I'), rot: 1, x: -2 }, next: 'O' });
+  check('4 satır birden temizlenince tetrises 1 olur', t.tetrises === 1 && t.lines === 4 && t.pieces === 1);
+
+  let u: GameState = newGame();
+  u.board[ROWS - 1] = Array(COLS).fill(1).map((v, c) => (c < 4 ? 0 : v));
+  u = hardDrop({ ...u, current: { ...spawnPiece('I'), x: 0 }, next: 'O' });
+  check('Tek satır temizlemek tetrises sayısını artırmaz', u.lines === 1 && u.tetrises === 0);
+
+  // zamanla kilitlenme de sayılır
+  let v: GameState = newGame();
+  v = { ...v, current: getGhost(v) };
+  v = tick(v, LOCK_DELAY_MS + 50);
+  check('Zamanla kilitlenen parça da sayılır', v.pieces === 1);
+}
+
 console.log('\n' + passed + ' kontrol geçti.');

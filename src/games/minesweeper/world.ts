@@ -208,7 +208,7 @@ export function reveal(world: World, x: number, y: number): RevealResult {
  * Bayrak, "burada mayın var" iddiasıdır:
  *  - Gerçekten mayınsa bayrak güvenle konur.
  *  - Mayın değilse yanlış iddia: o bölüm, mayına basılmış gibi patlar ('boom') ve kilitlenir.
- *  - Bayrağı kaldırmak serbesttir (bayraklar hep doğru olduğu için).
+ *  - Doğru bayrak kalıcıdır (kaldırılamaz). Yalnızca eski kayıtlardan kalan yanlış bayraklar kaldırılabilir.
  * Oyun başlamadan (ilk açılıştan önce) bayrak konamaz; mayınlar ilk açılışla kesinleşir.
  */
 export function toggleFlag(world: World, x: number, y: number): 'flagged' | 'unflagged' | 'boom' | 'none' {
@@ -218,6 +218,10 @@ export function toggleFlag(world: World, x: number, y: number): 'flagged' | 'unf
   if (st === HIDDEN && !world.safe) return 'none';
 
   if (st === FLAGGED) {
+    // Doğru bayrak (altında mayın var) kalıcıdır: bayrak kesin bir iddiadır, geri alınamaz.
+    // (Aksi halde aynı bayrağı sürekli koyup kaldırarak görev/başarım şişirilebilirdi.)
+    if (isMine(world, x, y)) return 'none';
+    // Eski kayıtlardan kalmış YANLIŞ bayrak kaldırılabilir; kare sonsuza dek kilitli kalmasın.
     const chunk = ensureChunk(world, x >> CHUNK_BITS, y >> CHUNK_BITS);
     chunk.state[localIndex(x, y)] = HIDDEN;
     world.flags--;

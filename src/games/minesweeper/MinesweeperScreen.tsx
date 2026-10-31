@@ -5,6 +5,7 @@ import type { LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SettingsPanel from '@/components/SettingsPanel';
 import { haptic, playSound } from '@/lib/feedback';
+import { flushProgress, record } from '@/lib/progress/progress';
 import { useSettings } from '@/lib/settings';
 import { addCoins, flushWallet, getCoins, loadWallet, spendCoins, useWallet } from '@/lib/wallet';
 import type { GameProps } from '../types';
@@ -354,6 +355,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
     saveTimer.current = null;
     saveBest(bestRef.current);
     flushWallet();
+    flushProgress();
     const w = worldRef.current;
     if (!w || w.revealed === 0) return;
     saveRun(w, viewRef.current);
@@ -469,9 +471,12 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
     } else if (res.kind === 'safe') {
       fx(res.opened >= 12 ? 'cascade' : 'reveal');
     }
+    if (res.kind === 'mine') record('ms.explosions', 1);
     if (res.opened > 0) {
       grantCoins(w);
       updateBest(w);
+      record('ms.cells', res.opened);
+      record('ms.maxOpen', res.opened);
     }
     scheduleSave();
     setVer((n) => n + 1);
@@ -487,6 +492,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
       return;
     }
     if (repairSection(w, cx, cy)) {
+      record('ms.repairs', 1);
       fx('repair');
       showToast('🔧 Bölge onarıldı, patlayan mayın etkisizleştirildi');
       scheduleSave();
@@ -506,17 +512,26 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
       showToast('Bayrak koymak için önce bir kare aç');
       return;
     }
+    const before = cellState(w, x, y);
     const res = toggleFlag(w, x, y);
     if (res === 'boom') {
       fx('boom');
+      record('ms.explosions', 1);
       const cost = repairCost(w, x >> CHUNK_BITS, y >> CHUNK_BITS);
       showToast(`💥 Yanlış bayrak! Orada mayın yoktu, bölge patladı. Onarım ${fmt(cost)} 🪙`);
       scheduleSave();
       setVer((n) => n + 1);
-    } else if (res !== 'none') {
+    } else if (res === 'flagged') {
+      fx('flag');
+      record('ms.flags', 1);
+      scheduleSave();
+      setVer((n) => n + 1);
+    } else if (res === 'unflagged') {
       fx('flag');
       scheduleSave();
       setVer((n) => n + 1);
+    } else if (before === FLAGGED) {
+      showToast('Doğru bayrak kalıcıdır: mayından eminsin ✔');
     }
   };
 
@@ -768,7 +783,7 @@ export default function MinesweeperScreen({ onExit }: GameProps) {
             <Text style={styles.how}>• Dokun: kareyi aç. İlk dokunuş her zaman güvenlidir.</Text>
             <Text style={styles.how}>
               • {Platform.OS === 'web' ? 'Sağ tık veya basılı tut' : 'Basılı tut'}: bayrak koy / kaldır (🚩 düğmesiyle de olur).
-              Bayrak, "burada mayın var" iddiasıdır: mayın olmayan yere bayrak koyarsan o bölge patlar. Emin değilsen koyma!
+              Bayrak, "burada mayın var" iddiasıdır: mayın olmayan yere bayrak koyarsan o bölge patlar. Doğru bayrak kalıcıdır. Emin değilsen koyma!
             </Text>
             <Text style={styles.how}>• Sayı, çevresindeki 8 karedeki mayın sayısıdır.</Text>
             <Text style={styles.how}>• Bir sayının çevresine o kadar bayrak koyup sayıya dokunursan kalan komşular açılır.</Text>

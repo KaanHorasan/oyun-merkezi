@@ -200,13 +200,17 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
   const [mx, my] = findCell(w, true, 10, 10);
   check('Mayın olan yere bayrak güvenle konur', toggleFlag(w, mx, my) === 'flagged' && cellState(w, mx, my) === FLAGGED && w.flags === 1 && w.locked.size === 0);
   check('Bayraklı kare açılmaz', reveal(w, mx, my).kind === 'none' && cellState(w, mx, my) === FLAGGED);
-  check('Bayrak kaldırılır', toggleFlag(w, mx, my) === 'unflagged' && cellState(w, mx, my) === HIDDEN && w.flags === 0);
+  check('Doğru bayrak kalıcıdır: kaldırılamaz (aç-kapa ile sayı şişirilemez)', toggleFlag(w, mx, my) === 'none' && cellState(w, mx, my) === FLAGGED && w.flags === 1);
+  // eski kayıttan kalmış YANLIŞ bayrak kaldırılabilir (kare kilitli kalmasın)
+  const [lx, ly] = findCell(w, false, 30, 30);
+  forceFlag(w, lx, ly);
+  check('Eski kayıttan kalan yanlış bayrak kaldırılabilir', toggleFlag(w, lx, ly) === 'unflagged' && cellState(w, lx, ly) === HIDDEN && w.flags === 1);
 
   const [sx, sy] = findCell(w, false, 10, 10);
   const before = w.explosions;
   check('Mayın olmayan yere bayrak koymak bölümü patlatır', toggleFlag(w, sx, sy) === 'boom' && isLockedAt(w, sx, sy) && w.explosions === before + 1);
   check('Patlayan bölümde yanlış bayrağın konumu kaydedilir', w.locked.get(chunkKey(sx >> 4, sy >> 4))?.x === sx && w.locked.get(chunkKey(sx >> 4, sy >> 4))?.y === sy);
-  check('Yanlış bayrak kalıcı bayrak olmaz, bayrak sayısı artmaz', cellState(w, sx, sy) === HIDDEN && w.flags === 0);
+  check('Yanlış bayrak kalıcı bayrak olmaz, bayrak sayısı artmaz', cellState(w, sx, sy) === HIDDEN && w.flags === 1);
   check('Patlayan bölümde bir daha bayrak konamaz', toggleFlag(w, sx, sy) === 'none');
   check('Açık kareye bayrak konmaz', toggleFlag(w, 0, 0) === 'none');
 
@@ -346,8 +350,12 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
   const flagsBefore = w.flags;
   check('Onarım başarılı', repairSection(w, cx, cy) === true && !isLockedChunk(w, cx, cy) && w.locked.size === 0);
   check('Patlayan mayın etkisizleştirilir (bayrak olur)', cellState(w, mx, my) === FLAGGED && w.flags === flagsBefore + 1);
-  check('Onarılan bölümde tekrar oynanır', toggleFlag(w, mx, my) === 'unflagged');
-  toggleFlag(w, mx, my); // tekrar bayrak
+  check('Etkisizleştirilen mayının bayrağı da kalıcıdır', toggleFlag(w, mx, my) === 'none' && cellState(w, mx, my) === FLAGGED);
+  let tx = 0, ty = 0, foundSafe = false;
+  for (let y = cy * 16; y < cy * 16 + 16 && !foundSafe; y++) for (let x = cx * 16; x < cx * 16 + 16 && !foundSafe; x++) {
+    if (!isMine(w, x, y) && cellState(w, x, y) === HIDDEN) { tx = x; ty = y; foundSafe = true; }
+  }
+  check('Onarılan bölümde tekrar oynanır (güvenli kare açılır)', foundSafe && reveal(w, tx, ty).kind === 'safe');
   check('Etkisiz mayına yanlışlıkla basılamaz (bayraklı)', reveal(w, mx, my).kind === 'none');
   check('İkinci onarım işe yaramaz', repairSection(w, cx, cy) === false);
 }
@@ -405,6 +413,7 @@ for (const [sx, sy] of [[0, 0], [5, -7], [-100, 250], [-1, -1]] as [number, numb
       const res = toggleFlag(w, x, y);
       if (res === 'boom') { flagBooms++; if (wasMine) ok = false; } // yalnızca mayın OLMAYAN yer patlatır
       if (res === 'flagged' && !wasMine) ok = false;
+      if (res === 'unflagged') ok = false; // doğru bayraklar kalıcı: kaldırma hiç olmamalı
     } else if (!isMine(w, x, y)) {
       const r = reveal(w, x, y);
       if (locked && r.kind !== 'none') ok = false; // kilitli bölüm asla değişmemeli

@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import NoticeHost from '@/components/NoticeHost';
+import { flushProgress } from '@/lib/progress/progress';
+import { flushWallet } from '@/lib/wallet';
 
 export default function RootLayout() {
   // Web: servis çalışanını kaydet (uygulama yüklenebilir olsun, internetsiz de açılsın).
@@ -15,10 +18,22 @@ export default function RootLayout() {
     navigator.serviceWorker.register(swUrl, { scope }).catch(() => {});
   }, []);
 
+  // Uygulama arka plana geçerken bekleyen ilerleme ve para kayıtlarını hemen yaz
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        flushProgress();
+        flushWallet();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   return (
     <>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }} />
+      <NoticeHost />
     </>
   );
 }

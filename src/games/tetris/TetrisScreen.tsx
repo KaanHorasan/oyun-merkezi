@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SettingsPanel from '@/components/SettingsPanel';
 import { haptic, playSound, rewindMusic, setMusic, setMusicVolume } from '@/lib/feedback';
 import type { HapticKind, SoundName } from '@/lib/feedback';
+import { record } from '@/lib/progress/progress';
 import { useSettings } from '@/lib/settings';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import type { GameProps } from '../types';
@@ -280,6 +281,32 @@ export default function TetrisScreen({ onExit }: GameProps) {
       saveJSON(BEST_KEY, finalScore);
     }
   }, [isOver, finalScore]);
+
+  // Görev ve başarımlar için istatistikler (oyundaki kesin sayaçların farkları bildirilir)
+  const statLines = game?.lines ?? 0;
+  const statTetrises = game?.tetrises ?? 0;
+  const statScore = game?.score ?? 0;
+  const statLevel = game?.level ?? 1;
+  const prevStats = useRef({ lines: 0, tetrises: 0 });
+  useEffect(() => {
+    const d = statLines - prevStats.current.lines;
+    if (d > 0) record('tt.lines', d);
+    prevStats.current.lines = statLines; // yeni oyunda 0'a döner
+  }, [statLines]);
+  useEffect(() => {
+    const d = statTetrises - prevStats.current.tetrises;
+    if (d > 0) record('tt.tetrises', d);
+    prevStats.current.tetrises = statTetrises;
+  }, [statTetrises]);
+  useEffect(() => {
+    if (statScore > 0) record('tt.bestScore', statScore);
+  }, [statScore]);
+  useEffect(() => {
+    if (statLevel > 1) record('tt.maxLevel', statLevel);
+  }, [statLevel]);
+  useEffect(() => {
+    if (isOver) record('tt.games', 1);
+  }, [isOver]);
 
   // Uygulama arka plana geçince otomatik duraklat
   useEffect(() => {

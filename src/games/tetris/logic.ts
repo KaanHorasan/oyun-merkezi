@@ -36,6 +36,10 @@ export type GameState = {
   lines: number;
   level: number;
   gameOver: boolean;
+  /** Bu oyunda kilitlenen parça sayısı */
+  pieces: number;
+  /** Bu oyunda 4 satırı birden temizleme sayısı (görev/başarımlar için kesin sayaç) */
+  tetrises: number;
   /** Yerçekimi için biriken süre (ms) */
   dropAcc: number;
   /** Parça yerdeyken biriken kilit süresi (ms) */
@@ -197,6 +201,8 @@ export function newGame(rng: Rng = Math.random): GameState {
     lines: 0,
     level: 1,
     gameOver: false,
+    pieces: 0,
+    tetrises: 0,
     dropAcc: 0,
     lockAcc: 0,
     lockResets: 0,
@@ -371,6 +377,8 @@ function lockPiece(state: GameState, rng: Rng): GameState {
       lines,
       level,
       gameOver,
+      pieces: state.pieces + 1,
+      tetrises: state.tetrises + (cleared === 4 ? 1 : 0),
     }),
     kind,
     cleared,

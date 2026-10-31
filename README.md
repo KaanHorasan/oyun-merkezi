@@ -71,7 +71,31 @@ Nasıl çalışır (geliştirici notu):
 - Ekranda yalnızca görünen kareler çizilir; kaydırırken sadece kapsayıcı kayar.
 - `world.ts` oyun mantığı (bölüm kilidi, onarım, para hesabı), `geometry.ts` kamera/dokunma matematiği,
   `persistence.ts` kayıt, `MinesweeperScreen.tsx` arayüz. Eski (oyunun bittiği sürümden kalma) kayıtlar da yüklenir.
-- Sıradaki fikirler: günlük görevler ve başarımlar (cüzdana ödül verir), bölüm tamamlama ödülü.
+- Sıradaki fikirler: bölüm tamamlama ödülü, günlük seri (streak) bonusu, hub'da üst bilgi/ayarlar.
+
+## Günlük görevler ve başarımlar
+
+Ana ekrandaki **🎯 Görevler** düğmesinden açılır (alınacak ödül varsa kırmızı rozet gösterir). Tüm oyunlar için ortaktır;
+ödüller ortak 🪙 cüzdanına eklenir.
+
+- **Günlük görevler:** her gün 3 görev (1 Tetris, 1 Mayın Tarlası, 1 serbest). Görevler tarihten türetilir, yani aynı gün
+  herkes için aynıdır. Her gece yarısı (cihazın yerel saati) yenilenir; yalnızca o gün yaptıkların sayılır.
+  Üçünü de bitirirsen **+50 🪙 bonus**. Ödülü "Ödülü al" ile sen alırsın.
+- **Başarımlar:** tüm zamanların istatistiklerine göre basamaklı (I, II, III...) ödüller: Kaşif, Bayrakçı, Acı Tecrübe,
+  Tamirci, Büyük Açılış, Satır Avcısı, Tetris Ustası, Yüksek Skor, Seviye Atlayıcı, Oyun Meraklısı, Günlük Düzenli.
+  Atlanan basamaklar birlikte alınabilir.
+- **Bildirim:** görev tamamlanınca / başarım açılınca ekranın üstünde kısa bir kart çıkar; dokununca Görevler açılır.
+- Mayın Tarlası'nda doğru bayrak **kalıcıdır** (kaldırılamaz). Aksi halde aynı bayrağı koyup kaldırarak görev/başarım şişirilebilirdi.
+
+Yeni görev veya başarım eklemek için yalnızca `src/lib/progress/definitions.ts` düzenlenir:
+- `QUEST_TEMPLATES`: görev şablonları (kolaydan zora hedefler ve ödüller), `BONUS_REWARD`: bonus
+- `ACHIEVEMENTS`: başarımlar ve basamakları
+- Yeni bir istatistik için `StatId` ve `STAT_KIND` ('sum': toplanır, 'max': en yükseği tutulur) eklenir, sonra oyundan
+  `record('istatistik', değer)` çağrılır (`src/lib/progress/progress.ts`).
+
+Nasıl çalışır: oyunlar yalnızca istatistik bildirir; görev/başarım hesabı, gün sıfırlama ve ödül verme `engine.ts` içindedir
+(React ve depolamadan bağımsız, testli). Tetris'te kilitlenen parça ve 4'lü temizleme gibi sayılar oyunun içinde kesin sayaçlarla
+tutulur, ekran bunların farkını bildirir.
 
 ## Müzik
 
@@ -115,6 +139,7 @@ Oyun mantığını (arayüzsüz) denemek için:
 npx tsx src/games/tetris/logic.test.ts
 npx tsx src/lib/volume.test.ts
 npx tsx src/lib/walletCore.test.ts
+npx tsx src/lib/progress/engine.test.ts
 npx tsx src/games/minesweeper/world.test.ts
 npx tsx src/games/minesweeper/geometry.test.ts
 ```
@@ -139,6 +164,8 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 - `src/app/` ekranlar (Expo Router): `index.tsx` hub, `game/[id].tsx` seçilen oyun
 - `src/games/types.ts` ortak oyun arayüzü
 - `src/games/registry.ts` tüm oyunların listesi (yeni oyun = yeni klasör + buraya bir kayıt)
+- `src/lib/progress/` günlük görevler ve başarımlar (`definitions.ts` tanımlar, `engine.ts` motor, `progress.ts` oyunlara açılan `record`)
+- `src/components/QuestsScreen.tsx`, `NoticeHost.tsx` Görevler ekranı ve bildirim kartı
 - `src/lib/` ortak altyapı: `storage.ts` (kalıcı kayıt), `settings.ts` (ses/titreşim ayarları), `feedback.ts` (ses + titreşim), `wallet.ts` + `walletCore.ts` (ortak oyun içi para)
 - `src/components/SettingsPanel.tsx` ortak ayarlar paneli, `VolumeSlider.tsx` ses düzeyi çubuğu
 - `assets/sounds/` ses efektleri ve müzik (kodla üretilmiş `.wav` dosyaları)
@@ -156,6 +183,6 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
    - [x] Arka plan müziği (Korobeiniki)
 4. [x] Sonsuz Mayın Tarlası (ilk sürüm: sonsuz dünya, bölümler, kayıt, rekor)
    - [x] Mayına basınca yalnızca o bölüm patlar; onarım oyun içi parayla (ortak cüzdan)
-   - [ ] Günlük görevler, başarımlar
+   - [x] Günlük görevler ve başarımlar (ortak cüzdana ödül)
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)
