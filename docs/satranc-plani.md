@@ -4,14 +4,15 @@ Sıradaki oyun. Mevcut yapıya uyuyor: saf (arayüzsüz) oyun motoru + testler +
 
 ## 1. İlk sürüm (v1) kapsamı
 
-- **Modlar:** bilgisayara karşı (4 seviye) ve aynı cihazda iki kişi. Online (uzaktan) şimdilik dışarıda.
+- **Mod:** yalnızca **aynı cihazda iki kişi**. Bilgisayara karşı (yapay zeka) bilinçli olarak sonraya bırakıldı (karar: ilk sürümde yok).
+  Online (uzaktan) da şimdilik dışarıda.
 - **Tam kurallar:** rok (kısa/uzun), geçerken alma (en passant), terfi (vezir/kale/fil/at seçimi), şah, şah mat, pat,
   50 hamle kuralı, 3 kez tekrar, yetersiz materyal.
 - **Arayüz:** modern tahta, seçili taş için yasal hamle noktaları, dokun-dokun ve sürükle-bırak, son hamle ve şah
   vurgusu, alınan taşlar, hamle listesi, geri al, tahtayı çevir, terfi seçici, otomatik kayıt ve "devam et".
 - **Platform:** ses, titreşim, ayarlar, ortak 🪙 cüzdan, günlük görevler, başarımlar.
 
-v1'de yok (sonraya): satranç saati, online oyun, günlük bulmaca, tema mağazası.
+v1'de yok (sonraya): **yapay zeka**, satranç saati, online oyun, günlük bulmaca, tema mağazası.
 
 ## 2. Mimari
 
@@ -56,7 +57,10 @@ Diğer testler:
 - Bilinen "1-2 hamlede mat" pozisyonlarında AI doğru hamleyi bulmalı
 - AI'lar arası turnuva: seviyeler arasında beklenen güç sıralaması (zor > orta > çaylak)
 
-## 4. Yapay zeka
+## 4. Yapay zeka (ertelendi: ilk sürümde yok)
+
+Aşağıdaki plan, yapay zeka eklenirken kullanılacak. Motor çekirdeği (aşama 1-2) zaten buna göre tasarlandı: hamle yapma/geri alma
+hızlı, pozisyon karması (aşama 2) ve test altyapısı hazır olacak.
 
 Kendi motorumuz (Stockfish kullanmıyoruz: GPL lisansı, birkaç MB'lık WASM, mobilde yerel modül gerektirir; basit bir
 oyun için fazla. İleride "Usta+" seviyesi olarak düşünülebilir).
@@ -87,23 +91,33 @@ Ortak ilerleme sistemine yeni istatistikler eklenir (`src/lib/progress/definitio
   `ch.captures`, `ch.promotions`, `ch.winStreak` (en iyi seri, "max")
 - Günlük görevler: "N oyun bitir", "Bilgisayara karşı N oyun kazan", "N taş al", "Bir piyonu terfi ettir"
 - Başarımlar: İlk Galibiyet, Mat Ustası (1/10/50), Rokçu (ilk rok), Terfi (1/10), Zor Rakibi Yen, Galibiyet Serisi (3/5/10)
-- **Para ödülü (🪙):** galibiyet, seviyeye göre (Çaylak az, Usta çok); beraberlik yarısı; teslim olmak ödül vermez.
-  **Sömürüyü engellemek için:** ödül için en az bir hamle sayısı (ör. 10) gerekir ve günlük kazanç sınırı olur
-  (aksi halde Çaylak'a karşı peş peşe hızlı galibiyetle para basılır).
+- **Para ödülü (🪙):** yapay zeka gelince galibiyet ödülü seviyeye göre verilecek (Çaylak az, Usta çok); beraberlik yarısı;
+  teslim olmak ödül vermez. **Sömürüyü engellemek için:** ödül için en az bir hamle sayısı (ör. 10) gerekir ve günlük kazanç
+  sınırı olur.
+  **Yapay zeka yokken (v1):** iki kişilik modda kişi kendi kendine iki tarafı da oynayıp (iki hamlede mat gibi) para kazanabilir.
+  Bu yüzden v1'de **oyun sonu para ödülü yok**. Görevler "N oyun bitir" gibi hafif, başarımlar tek seferlik ve düşük ödüllü
+  ("İlk Mat" gibi) olur; asıl ödüller yapay zekayla birlikte açılır.
 - **Para harcama yerleri:** ipucu, geri alma (ilk birkaçı ücretsiz olabilir), tema ve taş stilleri. (Mayın Tarlası'nda para
   onarıma gidiyor; satrançta kayıp ceza değil, o yüzden harcama alanı "kozmetik + yardım".)
 
 ## 7. Aşamalar
 
-| Aşama | İçerik | Büyüklük |
+| Aşama | İçerik | Durum |
 |---|---|---|
-| 1 | Motor çekirdeği: tahta, FEN, hamle üretimi, **perft doğrulaması** | 1 oturum |
-| 2 | Kural durumu: mat/pat/beraberlik, SAN/PGN, tekrar tespiti | 1 oturum |
-| 3 | Arayüz v1 (aynı cihazda iki kişi): tahta, SVG taşlar, hamle, vurgular, terfi, geri al, kayıt | 1-2 oturum |
-| 4 | Yapay zeka: değerlendirme, arama, 4 seviye, dilimli çalışma, güç testleri | 1-2 oturum |
-| 5 | Platform: ses/titreşim, ayarlar, para ödülü, görev ve başarımlar | 1 oturum |
-| 6 | Cila: taş kayma animasyonu, temalar, ipucu, PGN paylaş | 1 oturum |
-| Sonra | Satranç saati, **günlük bulmaca**, online oyun | ayrı planlanır |
+| 1 | Motor çekirdeği: tahta, FEN, hamle üretimi, **perft doğrulaması** | **Tamamlandı** |
+| 2 | Kural durumu: mat/pat/beraberlik, SAN/PGN, tekrar tespiti | Sırada |
+| 3 | Arayüz v1 (aynı cihazda iki kişi): tahta, SVG taşlar, hamle, vurgular, terfi, geri al, kayıt | Sonra |
+| 4 | Ses/titreşim, ayarlar, görev ve başarımlar (hafif ödüller, yukarıdaki nota bak) | Sonra |
+| 5 | Cila: taş kayma animasyonu, temalar, PGN paylaş | Sonra |
+| Sonra | **Yapay zeka** (4 seviye), ipucu, satranç saati, **günlük bulmaca**, online oyun | Ertelendi, ayrı planlanır |
+
+### Aşama 1 sonucu
+
+`src/games/chess/engine/` altında: `types.ts`, `board.ts` (0x88, yap/geri al, saldırı tespiti), `fen.ts` (okuma, doğrulama, yazma),
+`moves.ts` (hamle üretimi, yasallık, perft). Doğrulama:
+- Standart perft pozisyonlarının hepsi yayımlanmış sayılarla birebir tutuyor (başlangıçta 5. derinlik: 4.865.609).
+- 900 rastgele pozisyonda yasal hamle listesi ve her hamlenin sonucu FEN'i, bağımsız bir kütüphaneyle (python-chess) birebir aynı.
+- Yaklaşık 1 milyon hamlelik rastgele oyunda yap/geri al hiç bozulmuyor.
 
 **Günlük bulmaca** bu platforma çok uyar: "bugünün bulmacası" günlük görev gibi çalışır. Veri için Lichess'in açık (CC0)
 bulmaca veritabanından küçük bir seçki alınabilir. v2 için öneriyorum.
@@ -120,8 +134,8 @@ senkronu, bağlantı kopması, hile önleme. Şimdilik kapsam dışı; motor saf
 
 ## 9. Başlamadan önce kararlar (önerilerim)
 
-1. İlk sürüm hem bilgisayara karşı hem aynı cihazda iki kişi (evet).
-2. Dört rakip seviyesi: Çaylak, Orta, Zor, Usta.
+1. İlk sürüm yalnızca aynı cihazda iki kişi (karar verildi). Yapay zeka sonra.
+2. Yapay zeka gelince dört rakip seviyesi: Çaylak, Orta, Zor, Usta.
 3. Kendi çizdiğimiz SVG taşlar; tema ve taş stilleri sonra 🪙 ile.
 4. Saat ve online v1'de yok.
 5. Günlük bulmaca v2.

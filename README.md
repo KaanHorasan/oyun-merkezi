@@ -97,6 +97,16 @@ Nasıl çalışır: oyunlar yalnızca istatistik bildirir; görev/başarım hesa
 (React ve depolamadan bağımsız, testli). Tetris'te kilitlenen parça ve 4'lü temizleme gibi sayılar oyunun içinde kesin sayaçlarla
 tutulur, ekran bunların farkını bildirir.
 
+## Satranç (geliştiriliyor)
+
+Sıradaki oyun. İlk sürüm: aynı cihazda iki kişi (yapay zeka sonra). Plan: `docs/satranc-plani.md`.
+
+- **Aşama 1 tamamlandı: motor çekirdeği** (`src/games/chess/engine/`). Henüz arayüzü ve hub kartı yok.
+- Doğrulama iki katmanlı: yayımlanmış **perft** sayıları (`perft.test.ts`) ve bağımsız bir kütüphaneyle (python-chess)
+  üretilmiş 900 pozisyonluk karşılaştırma seti (`engine.test.ts`, `fixtures/random-positions.json`).
+- Doğrulama setini yeniden üretmek için (testleri çalıştırmak için Python gerekmez):
+  `pip install chess` ve `python3 tools/gen-chess-fixtures.py`.
+
 ## Müzik
 
 Tetris'te arka planda **Korobeiniki** melodisi çalar. ⚙ Ayarlar'da müzik ve ses efektleri için ayrı açma/kapama anahtarı
@@ -142,6 +152,8 @@ npx tsx src/lib/walletCore.test.ts
 npx tsx src/lib/progress/engine.test.ts
 npx tsx src/games/minesweeper/world.test.ts
 npx tsx src/games/minesweeper/geometry.test.ts
+npx tsx src/games/chess/engine/engine.test.ts      # hızlı
+npx tsx src/games/chess/engine/perft.test.ts       # standart perft sayıları (yaklaşık 25 sn)
 ```
 
 ## Tetris kontrolleri
@@ -185,5 +197,8 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
    - [x] Mayına basınca yalnızca o bölüm patlar; onarım oyun içi parayla (ortak cüzdan)
    - [x] Günlük görevler ve başarımlar (ortak cüzdana ödül)
 5. [ ] Satranç (plan: `docs/satranc-plani.md`)
+   - [x] Aşama 1: motor çekirdeği (tahta, FEN, hamle üretimi, perft doğrulaması)
+   - [ ] Aşama 2: mat/pat/beraberlik, notasyon
+   - [ ] Aşama 3: arayüz (aynı cihazda iki kişi)
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)
