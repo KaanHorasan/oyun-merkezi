@@ -15,6 +15,10 @@ export type Settings = {
   chessHints: boolean;
   /** Satranç: her hamleden sonra tahtayı sırası gelen oyuncuya doğru çevir */
   chessAutoFlip: boolean;
+  /** Satranç: seçili süre ayarının kimliği (games/chess/clock.ts içindeki TIME_PRESETS) */
+  chessTime: string;
+  /** Satranç: sürenin son 5 saniyesinde her saniye tık sesi/titreşim */
+  chessClockWarn: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -27,6 +31,8 @@ const DEFAULTS: Settings = {
   showButtons: true,
   chessHints: true,
   chessAutoFlip: false,
+  chessTime: 'none',
+  chessClockWarn: true,
 };
 const KEY = 'settings:v1';
 

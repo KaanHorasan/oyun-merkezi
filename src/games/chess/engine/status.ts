@@ -6,7 +6,7 @@ import type { Color } from './types';
  * Bir renk, ne kadar uğraşırsa uğraşsın rakibini mat edemez mi?
  * (Tanım, python-chess'in `has_insufficient_material` kuralıyla birebir aynıdır; testler onunla karşılaştırır.)
  */
-function cannotEverMate(board: Board, color: Color): boolean {
+export function cannotEverMate(board: Board, color: Color): boolean {
   let ownPieces = 0; // şah dahil
   let ownKnights = 0, ownBishops = 0, ownMajors = 0; // piyon, kale, vezir
   let oppNonKingNonQueen = 0;

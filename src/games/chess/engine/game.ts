@@ -4,7 +4,7 @@ import { findMove, findMoveUci, legalMoves } from './moves';
 import { toPgn } from './pgn';
 import type { PgnResult } from './pgn';
 import { moveToSan } from './san';
-import { isInsufficientMaterial, opposite, positionKey } from './status';
+import { cannotEverMate, isInsufficientMaterial, opposite, positionKey } from './status';
 import { BLACK, FLAG_EP, PAWN, WHITE, makePiece, moveFlags, moveFrom, movePromo, moveTo, moveToUci } from './types';
 import type { Color } from './types';
 
@@ -12,11 +12,12 @@ export type GameStatus =
   | { kind: 'playing'; check: boolean }
   | { kind: 'checkmate'; winner: Color }
   | { kind: 'stalemate' }
-  | { kind: 'draw'; reason: 'fifty' | 'repetition' | 'insufficient' | 'agreement' }
-  | { kind: 'resigned'; winner: Color };
+  | { kind: 'draw'; reason: 'fifty' | 'repetition' | 'insufficient' | 'agreement' | 'timeout-insufficient' }
+  | { kind: 'resigned'; winner: Color }
+  | { kind: 'timeout'; winner: Color };
 
 /** Oyunu bitiren, hamle olmayan olaylar */
-export type Ending = { kind: 'resigned'; loser: Color } | { kind: 'agreed-draw' };
+export type Ending = { kind: 'resigned'; loser: Color } | { kind: 'agreed-draw' } | { kind: 'timeout'; loser: Color };
 
 export type MoveRecord = {
   move: number;
@@ -67,6 +68,10 @@ export class ChessGame {
   get isOver(): boolean {
     return this.status.kind !== 'playing';
   }
+  /** Oyun süre bitimiyle sona erdiyse süresi biten taraf (beraberlikle bitse de), yoksa null */
+  get timeoutLoser(): Color | null {
+    return this.ending?.kind === 'timeout' ? this.ending.loser : null;
+  }
 
   legalMoves(): number[] {
     if (!this.legalCache) this.legalCache = legalMoves(this.board);
@@ -84,9 +89,14 @@ export class ChessGame {
 
   private computeStatus(): GameStatus {
     if (this.ending) {
-      return this.ending.kind === 'resigned'
-        ? { kind: 'resigned', winner: opposite(this.ending.loser) }
-        : { kind: 'draw', reason: 'agreement' };
+      const e = this.ending;
+      if (e.kind === 'resigned') return { kind: 'resigned', winner: opposite(e.loser) };
+      if (e.kind === 'timeout') {
+        // Süresi biten oyuncunun rakibi ne yaparsa yapsın mat edemiyorsa (ör. yalnızca şahı kaldıysa) oyun berabere biter
+        const winner = opposite(e.loser);
+        return cannotEverMate(this.board, winner) ? { kind: 'draw', reason: 'timeout-insufficient' } : { kind: 'timeout', winner };
+      }
+      return { kind: 'draw', reason: 'agreement' };
     }
     const legal = this.legalMoves();
     const check = this.board.inCheck();
@@ -140,7 +150,7 @@ export class ChessGame {
     return rec;
   }
 
-  /** Teslim olma/beraberlik kararı varsa onu kaldırır, yoksa son hamleyi geri alır. Bir şey değiştiyse true. */
+  /** Teslim olma/süre bitimi/beraberlik kararı varsa onu kaldırır, yoksa son hamleyi geri alır. Bir şey değiştiyse true. */
   undo(): boolean {
     if (this.ending) {
       this.ending = null;
@@ -162,6 +172,14 @@ export class ChessGame {
     return true;
   }
 
+  /** `loser`ın süresi bitti. Rakibi mat edebilecek taşa sahipse rakip kazanır, değilse beraberlik. */
+  flag(loser: Color): boolean {
+    if (this.isOver) return false;
+    this.ending = { kind: 'timeout', loser };
+    this.invalidate();
+    return true;
+  }
+
   agreeDraw(): boolean {
     if (this.isOver) return false;
     this.ending = { kind: 'agreed-draw' };
@@ -171,7 +189,7 @@ export class ChessGame {
 
   get result(): PgnResult {
     const s = this.status;
-    if (s.kind === 'checkmate' || s.kind === 'resigned') return s.winner === WHITE ? '1-0' : '0-1';
+    if (s.kind === 'checkmate' || s.kind === 'resigned' || s.kind === 'timeout') return s.winner === WHITE ? '1-0' : '0-1';
     if (s.kind === 'stalemate' || s.kind === 'draw') return '1/2-1/2';
     return '*';
   }
@@ -193,6 +211,7 @@ export class ChessGame {
       const e = save.ending;
       if (e) {
         if (e.kind === 'resigned' && (e.loser === WHITE || e.loser === BLACK)) g.resign(e.loser);
+        else if (e.kind === 'timeout' && (e.loser === WHITE || e.loser === BLACK)) g.flag(e.loser);
         else if (e.kind === 'agreed-draw') g.agreeDraw();
         else return null;
       }

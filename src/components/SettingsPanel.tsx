@@ -89,6 +89,12 @@ export default function SettingsPanel({ onClose, ghost = false, buttons = false,
               value={settings.chessAutoFlip}
               onChange={(v) => update({ chessAutoFlip: v })}
             />
+            <Row
+              label="Son saniye uyarısı"
+              hint="Süreli oyunda son 5 saniyede her saniye tık sesi ve titreşim"
+              value={settings.chessClockWarn}
+              onChange={(v) => update({ chessClockWarn: v })}
+            />
           </>
         )}
         <Pressable style={styles.close} onPress={onClose}>

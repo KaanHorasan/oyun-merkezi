@@ -105,15 +105,23 @@ Aynı cihazda iki kişi, tam kurallarla. Ana ekrandaki **♟️ Satranç** kart�
   taşı seçersin. Rok, geçerken alma, terfi, şah mat, pat tam uygulanır.
 - **Araçlar:** Geri al, Çevir (tahtayı döndür), Teslim, Beraberlik; hamle listesi; alınan taşlar ve maddi üstünlük.
   Oyun bitince Yeni oyun, Geri al ve PGN paylaş. Oyun otomatik kaydedilir, menüden "Devam et" ile sürer.
-- **Ayarlar (⚙):** yasal hamle noktaları aç/kapa, tahtayı her hamlede otomatik çevir (karşılıklı oynarken), ses, titreşim.
+- **Süre (satranç saati):** menüden yeni oyun için seçilir. *Hamle başı* (10/15/30/60 sn: her hamle için sabit süre, sıran gelince
+  baştan başlar) ya da *toplam süre* (3 dk + 2 sn, 5 dk, 10 dk, 15 dk + 10 sn: her oyuncunun bir havuzu var, hamlede artış eklenir).
+  Saat beyazın ilk hamlesinden sonra başlar; menüye, ayarlara ya da arka plana geçince durur. Süresi biten kaybeder; rakibinin
+  mat edecek taşı yoksa berabere. Süre bitişi ve hamleler geri alınabilir, saat de geri döner. Seçim ve saat kayda dahildir.
+- **Ekran ölçekleme:** dikey ekranda tahta üstte, yatay ekranda (telefon yan, tablet, bilgisayar) tahta solda ve sağda yan panel.
+  Tahta, yazılar ve boşluklar ekran boyutuna göre büyür/küçülür (`layout.ts`, testli).
+- **Ayarlar (⚙):** yasal hamle noktaları aç/kapa, tahtayı her hamlede otomatik çevir (karşılıklı oynarken), son saniye uyarısı
+  (son 5 saniyede tık sesi/titreşim), ses, titreşim.
 - **Beraberlikler otomatiktir:** aynı pozisyon 3 kez, 50 hamlede piyon hamlesi/alış yok, ya da mat için yeterli taş yok.
-- **Bilerek v1'de yok:** yapay zeka, saat, sürükle-bırak, taş animasyonu, para ödülü (iki kişilik modda kendi kendine
+- **Bilerek v1'de yok:** yapay zeka, sürükle-bırak, taş animasyonu, para ödülü (iki kişilik modda kendi kendine
   oynayıp para kazanılmasın diye), satranç görevleri/başarımları.
 
 Yapı (`src/games/chess/`):
 - `engine/`: saf (arayüzsüz) motor. `board.ts` tahta (0x88, yap/geri al), `fen.ts`, `moves.ts` (hamle üretimi, perft),
   `status.ts` (yetersiz materyal, pozisyon anahtarı), `san.ts` (notasyon), `pgn.ts`, `game.ts` (`ChessGame`: hamle geçmişi,
   durum, geri al, teslim, kayıt).
+- `clock.ts` satranç saati (saf mantık, testli), `layout.ts` ekran boyutuna göre yerleşim (saf, testli).
 - `controller.ts` dokunma akışı, `geometry.ts` tahta-ekran eşlemesi, `summary.ts` alınan taşlar, `ChessBoard.tsx` tahta
   (tek bir SVG), `pieces.tsx` + `pieceShapes.ts` kendi çizdiğimiz taşlar, `ChessScreen.tsx` ekran, `persistence.ts` kayıt.
 

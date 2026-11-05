@@ -12,7 +12,7 @@ Sıradaki oyun. Mevcut yapıya uyuyor: saf (arayüzsüz) oyun motoru + testler +
   vurgusu, alınan taşlar, hamle listesi, geri al, tahtayı çevir, terfi seçici, otomatik kayıt ve "devam et".
 - **Platform:** ses, titreşim, ayarlar, ortak 🪙 cüzdan, günlük görevler, başarımlar.
 
-v1'de yok (sonraya): **yapay zeka**, satranç saati, online oyun, günlük bulmaca, tema mağazası.
+v1'de yok (sonraya): **yapay zeka**, online oyun, günlük bulmaca, tema mağazası.
 
 ## 2. Mimari
 
@@ -109,7 +109,8 @@ Ortak ilerleme sistemine yeni istatistikler eklenir (`src/lib/progress/definitio
 | 3 | Arayüz v1 (aynı cihazda iki kişi): tahta, SVG taşlar, hamle, vurgular, terfi, geri al, kayıt | **Tamamlandı** (sürükle-bırak ve animasyon yok) |
 | 4 | Görev ve başarımlar (hafif ödüller, yukarıdaki nota bak). Ses/titreşim ve ayarlar aşama 3'te eklendi | Sırada |
 | 5 | Cila: sürükle-bırak, taş kayma animasyonu, temalar (PGN paylaş aşama 3'te eklendi) | Sonra |
-| Sonra | **Yapay zeka** (4 seviye), ipucu, satranç saati, **günlük bulmaca**, online oyun | Ertelendi, ayrı planlanır |
+| Sonra | **Yapay zeka** (4 seviye), ipucu, **günlük bulmaca**, online oyun | Ertelendi, ayrı planlanır |
+| Ek | Satranç saati (hamle başı + toplam süre) ve ekran boyutuna göre ölçekleme | **Tamamlandı** |
 
 ### Aşama 1 sonucu
 
@@ -127,7 +128,18 @@ Ortak ilerleme sistemine yeni istatistikler eklenir (`src/lib/progress/definitio
 - **Aşama 3:** menü + iki oyunculu tahta, kendi çizdiğimiz SVG taşlar, yasal hamle noktaları, son hamle ve şah vurgusu, terfi
   seçici, alınan taşlar ve maddi üstünlük, hamle listesi, geri al, çevir, teslim, anlaşmalı beraberlik, PGN paylaş, otomatik kayıt,
   isteğe bağlı otomatik çevirme. Dokunma akışı (`controller.ts`) ve tahta eşlemesi (`geometry.ts`) testli.
-- **Bilinen eksikler:** sürükle-bırak, taş animasyonu, saat, satranç görevleri ve başarımları. Para ödülü bilerek yok.
+- **Bilinen eksikler:** sürükle-bırak, taş animasyonu, satranç görevleri ve başarımları. Para ödülü bilerek yok.
+
+### Süre (saat) ve ekran ölçekleme
+
+- **Süre:** `clock.ts` (saf mantık, `clock.test.ts`). İki mod: *hamle başı* (10/15/30/60 sn) ve *toplam süre + artış*
+  (3+2, 5+0, 10+0, 15+10). Süre menüden yeni oyun için seçilir (`chessTime` ayarı). Saat beyazın ilk hamlesinden sonra başlar,
+  ilk hamleye artış eklenmez. Menü/ayarlar/onay penceresi/arka plan saati durdurur. Süre bitince `ChessGame.flag()`: rakip
+  kazanır; rakibin mat edecek taşı yoksa (FIDE kuralı, `cannotEverMate`) berabere. Geri al hem hamleyi hem süreyi geri alır;
+  süre bitişini geri alınca süresi biten tarafa kısa ek süre verilir. Saat kayda dahildir (devam edince kaldığı yerden).
+- **Ölçekleme:** `layout.ts` (saf, `layout.test.ts`). Dikeyde tahta üstte; yatayda (genişlik >= 1,25 x yükseklik) tahta solda,
+  yan panel sağda. Yazı/boşluk ölçeği 0,85 - 1,35; tahta 200 - 760 (dikey) / 900 (yatay) px arasında.
+- **Sonraya:** özel süre (kendin gir), "süre bitince rastgele hamle" gibi seçenekler, PGN'e `TimeControl` etiketi.
 
 **Günlük bulmaca** bu platforma çok uyar: "bugünün bulmacası" günlük görev gibi çalışır. Veri için Lichess'in açık (CC0)
 bulmaca veritabanından küçük bir seçki alınabilir. v2 için öneriyorum.
@@ -147,5 +159,5 @@ senkronu, bağlantı kopması, hile önleme. Şimdilik kapsam dışı; motor saf
 1. İlk sürüm yalnızca aynı cihazda iki kişi (karar verildi). Yapay zeka sonra.
 2. Yapay zeka gelince dört rakip seviyesi: Çaylak, Orta, Zor, Usta.
 3. Kendi çizdiğimiz SVG taşlar; tema ve taş stilleri sonra 🪙 ile.
-4. Saat ve online v1'de yok.
+4. Online v1'de yok (saat sonradan eklendi).
 5. Günlük bulmaca v2.
