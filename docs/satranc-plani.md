@@ -105,10 +105,10 @@ Ortak ilerleme sistemine yeni istatistikler eklenir (`src/lib/progress/definitio
 | Aşama | İçerik | Durum |
 |---|---|---|
 | 1 | Motor çekirdeği: tahta, FEN, hamle üretimi, **perft doğrulaması** | **Tamamlandı** |
-| 2 | Kural durumu: mat/pat/beraberlik, SAN/PGN, tekrar tespiti | Sırada |
-| 3 | Arayüz v1 (aynı cihazda iki kişi): tahta, SVG taşlar, hamle, vurgular, terfi, geri al, kayıt | Sonra |
-| 4 | Ses/titreşim, ayarlar, görev ve başarımlar (hafif ödüller, yukarıdaki nota bak) | Sonra |
-| 5 | Cila: taş kayma animasyonu, temalar, PGN paylaş | Sonra |
+| 2 | Kural durumu: mat/pat/beraberlik, SAN/PGN, tekrar tespiti | **Tamamlandı** |
+| 3 | Arayüz v1 (aynı cihazda iki kişi): tahta, SVG taşlar, hamle, vurgular, terfi, geri al, kayıt | **Tamamlandı** (sürükle-bırak ve animasyon yok) |
+| 4 | Görev ve başarımlar (hafif ödüller, yukarıdaki nota bak). Ses/titreşim ve ayarlar aşama 3'te eklendi | Sırada |
+| 5 | Cila: sürükle-bırak, taş kayma animasyonu, temalar (PGN paylaş aşama 3'te eklendi) | Sonra |
 | Sonra | **Yapay zeka** (4 seviye), ipucu, satranç saati, **günlük bulmaca**, online oyun | Ertelendi, ayrı planlanır |
 
 ### Aşama 1 sonucu
@@ -118,6 +118,16 @@ Ortak ilerleme sistemine yeni istatistikler eklenir (`src/lib/progress/definitio
 - Standart perft pozisyonlarının hepsi yayımlanmış sayılarla birebir tutuyor (başlangıçta 5. derinlik: 4.865.609).
 - 900 rastgele pozisyonda yasal hamle listesi ve her hamlenin sonucu FEN'i, bağımsız bir kütüphaneyle (python-chess) birebir aynı.
 - Yaklaşık 1 milyon hamlelik rastgele oyunda yap/geri al hiç bozulmuyor.
+
+### Aşama 2 ve 3 sonucu
+
+- **Aşama 2:** `status.ts`, `san.ts`, `pgn.ts`, `game.ts`. Yetersiz materyal tanımı python-chess ile birebir; 3 tekrar ve 50 hamle
+  kuralları otomatik uygulanır (oyuncuya "talep et" sorulmaz, basitlik için). Notasyon 3.105 hamlede, her hamle sonrası durum
+  bayrakları 70 oyunda bağımsız kütüphaneyle birebir aynı.
+- **Aşama 3:** menü + iki oyunculu tahta, kendi çizdiğimiz SVG taşlar, yasal hamle noktaları, son hamle ve şah vurgusu, terfi
+  seçici, alınan taşlar ve maddi üstünlük, hamle listesi, geri al, çevir, teslim, anlaşmalı beraberlik, PGN paylaş, otomatik kayıt,
+  isteğe bağlı otomatik çevirme. Dokunma akışı (`controller.ts`) ve tahta eşlemesi (`geometry.ts`) testli.
+- **Bilinen eksikler:** sürükle-bırak, taş animasyonu, saat, satranç görevleri ve başarımları. Para ödülü bilerek yok.
 
 **Günlük bulmaca** bu platforma çok uyar: "bugünün bulmacası" günlük görev gibi çalışır. Veri için Lichess'in açık (CC0)
 bulmaca veritabanından küçük bir seçki alınabilir. v2 için öneriyorum.

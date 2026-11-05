@@ -97,15 +97,33 @@ Nasıl çalışır: oyunlar yalnızca istatistik bildirir; görev/başarım hesa
 (React ve depolamadan bağımsız, testli). Tetris'te kilitlenen parça ve 4'lü temizleme gibi sayılar oyunun içinde kesin sayaçlarla
 tutulur, ekran bunların farkını bildirir.
 
-## Satranç (geliştiriliyor)
+## Satranç
 
-Sıradaki oyun. İlk sürüm: aynı cihazda iki kişi (yapay zeka sonra). Plan: `docs/satranc-plani.md`.
+Aynı cihazda iki kişi, tam kurallarla. Ana ekrandaki **♟️ Satranç** kartından açılır. Plan ve kararlar: `docs/satranc-plani.md`.
 
-- **Aşama 1 tamamlandı: motor çekirdeği** (`src/games/chess/engine/`). Henüz arayüzü ve hub kartı yok.
-- Doğrulama iki katmanlı: yayımlanmış **perft** sayıları (`perft.test.ts`) ve bağımsız bir kütüphaneyle (python-chess)
-  üretilmiş 900 pozisyonluk karşılaştırma seti (`engine.test.ts`, `fixtures/random-positions.json`).
-- Doğrulama setini yeniden üretmek için (testleri çalıştırmak için Python gerekmez):
-  `pip install chess` ve `python3 tools/gen-chess-fixtures.py`.
+- **Oynanış:** taşa dokun, gidebileceği kareler noktalarla görünür, sonra gideceği kareye dokun. Piyon son sıraya gelince
+  taşı seçersin. Rok, geçerken alma, terfi, şah mat, pat tam uygulanır.
+- **Araçlar:** Geri al, Çevir (tahtayı döndür), Teslim, Beraberlik; hamle listesi; alınan taşlar ve maddi üstünlük.
+  Oyun bitince Yeni oyun, Geri al ve PGN paylaş. Oyun otomatik kaydedilir, menüden "Devam et" ile sürer.
+- **Ayarlar (⚙):** yasal hamle noktaları aç/kapa, tahtayı her hamlede otomatik çevir (karşılıklı oynarken), ses, titreşim.
+- **Beraberlikler otomatiktir:** aynı pozisyon 3 kez, 50 hamlede piyon hamlesi/alış yok, ya da mat için yeterli taş yok.
+- **Bilerek v1'de yok:** yapay zeka, saat, sürükle-bırak, taş animasyonu, para ödülü (iki kişilik modda kendi kendine
+  oynayıp para kazanılmasın diye), satranç görevleri/başarımları.
+
+Yapı (`src/games/chess/`):
+- `engine/`: saf (arayüzsüz) motor. `board.ts` tahta (0x88, yap/geri al), `fen.ts`, `moves.ts` (hamle üretimi, perft),
+  `status.ts` (yetersiz materyal, pozisyon anahtarı), `san.ts` (notasyon), `pgn.ts`, `game.ts` (`ChessGame`: hamle geçmişi,
+  durum, geri al, teslim, kayıt).
+- `controller.ts` dokunma akışı, `geometry.ts` tahta-ekran eşlemesi, `summary.ts` alınan taşlar, `ChessBoard.tsx` tahta
+  (tek bir SVG), `pieces.tsx` + `pieceShapes.ts` kendi çizdiğimiz taşlar, `ChessScreen.tsx` ekran, `persistence.ts` kayıt.
+
+Doğrulama:
+- **Perft:** yayımlanmış sayılarla birebir (`perft.test.ts`).
+- **Bağımsız kütüphane (python-chess) karşılaştırması:** 900 pozisyonda yasal hamleler, hamle sonuçları, notasyon, mat/pat;
+  70 oyunda her hamle sonrası beraberlik bayrakları ve PGN metni (`engine.test.ts`, `game.test.ts`,
+  `engine/fixtures/random-positions.json`).
+- Doğrulama setini yeniden üretmek için (testler için Python gerekmez): `pip install chess` ve
+  `python3 tools/gen-chess-fixtures.py`.
 
 ## Müzik
 
@@ -152,7 +170,9 @@ npx tsx src/lib/walletCore.test.ts
 npx tsx src/lib/progress/engine.test.ts
 npx tsx src/games/minesweeper/world.test.ts
 npx tsx src/games/minesweeper/geometry.test.ts
-npx tsx src/games/chess/engine/engine.test.ts      # hızlı
+npx tsx src/games/chess/ui.test.ts                 # arayüz mantığı
+npx tsx src/games/chess/engine/engine.test.ts      # motor (hızlı)
+npx tsx src/games/chess/engine/game.test.ts        # durum kuralları, notasyon, PGN, oyun sınıfı
 npx tsx src/games/chess/engine/perft.test.ts       # standart perft sayıları (yaklaşık 25 sn)
 ```
 
@@ -179,7 +199,7 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
 - `src/lib/progress/` günlük görevler ve başarımlar (`definitions.ts` tanımlar, `engine.ts` motor, `progress.ts` oyunlara açılan `record`)
 - `src/components/QuestsScreen.tsx`, `NoticeHost.tsx` Görevler ekranı ve bildirim kartı
 - `src/lib/` ortak altyapı: `storage.ts` (kalıcı kayıt), `settings.ts` (ses/titreşim ayarları), `feedback.ts` (ses + titreşim), `wallet.ts` + `walletCore.ts` (ortak oyun içi para)
-- `src/components/SettingsPanel.tsx` ortak ayarlar paneli, `VolumeSlider.tsx` ses düzeyi çubuğu
+- `src/components/SettingsPanel.tsx` ortak ayarlar paneli (oyuna özel satırlar: hayalet parça, butonlar, satranç seçenekleri), `VolumeSlider.tsx` ses düzeyi çubuğu
 - `assets/sounds/` ses efektleri ve müzik (kodla üretilmiş `.wav` dosyaları)
 - `tools/make-music.py` Tetris müziği üreticisi
 - `src/games/tetris/` Tetris: `logic.ts` (saf oyun mantığı), `logic.test.ts` (testler), `TetrisScreen.tsx` (arayüz)
@@ -198,7 +218,9 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
    - [x] Günlük görevler ve başarımlar (ortak cüzdana ödül)
 5. [ ] Satranç (plan: `docs/satranc-plani.md`)
    - [x] Aşama 1: motor çekirdeği (tahta, FEN, hamle üretimi, perft doğrulaması)
-   - [ ] Aşama 2: mat/pat/beraberlik, notasyon
-   - [ ] Aşama 3: arayüz (aynı cihazda iki kişi)
+   - [x] Aşama 2: mat/pat/beraberlik, notasyon (SAN), PGN
+   - [x] Aşama 3: arayüz (aynı cihazda iki kişi), hub kartı
+   - [ ] Aşama 4: satranç görevleri ve başarımları (hafif ödüllü)
+   - [ ] Aşama 5: cila (sürükle-bırak, taş animasyonu, temalar)
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)

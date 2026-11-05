@@ -8,6 +8,7 @@ type Props = {
   /** Oyuna özel seçenekler */
   ghost?: boolean;
   buttons?: boolean;
+  chess?: boolean;
 };
 
 function Row({
@@ -32,7 +33,7 @@ function Row({
   );
 }
 
-export default function SettingsPanel({ onClose, ghost = false, buttons = false }: Props) {
+export default function SettingsPanel({ onClose, ghost = false, buttons = false, chess = false }: Props) {
   const [settings, update] = useSettings();
 
   return (
@@ -73,6 +74,22 @@ export default function SettingsPanel({ onClose, ghost = false, buttons = false 
             value={settings.showButtons}
             onChange={(v) => update({ showButtons: v })}
           />
+        )}
+        {chess && (
+          <>
+            <Row
+              label="Yasal hamle noktaları"
+              hint="Taşa dokununca gidebileceği kareleri gösterir"
+              value={settings.chessHints}
+              onChange={(v) => update({ chessHints: v })}
+            />
+            <Row
+              label="Tahtayı otomatik çevir"
+              hint="Her hamleden sonra tahta sırası gelen oyuncuya döner (karşılıklı oynarken)"
+              value={settings.chessAutoFlip}
+              onChange={(v) => update({ chessAutoFlip: v })}
+            />
+          </>
         )}
         <Pressable style={styles.close} onPress={onClose}>
           <Text style={styles.closeText}>Kapat</Text>

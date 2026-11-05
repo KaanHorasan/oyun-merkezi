@@ -1,8 +1,16 @@
 import type { GameDefinition } from './types';
 import MinesweeperScreen from './minesweeper/MinesweeperScreen';
 import TetrisScreen from './tetris/TetrisScreen';
+import ChessScreen from './chess/ChessScreen';
 
 export const games: GameDefinition[] = [
+  {
+    id: 'chess',
+    name: 'Satranç',
+    description: 'Aynı cihazda iki kişi, tam kurallarla.',
+    icon: '♟️',
+    Component: ChessScreen,
+  },
   {
     id: 'tetris',
     name: 'Tetris',

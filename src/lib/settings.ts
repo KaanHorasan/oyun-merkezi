@@ -11,6 +11,10 @@ export type Settings = {
   vibration: boolean;
   ghost: boolean;
   showButtons: boolean;
+  /** Satranç: seçili taşın yasal karelerini noktalarla göster */
+  chessHints: boolean;
+  /** Satranç: her hamleden sonra tahtayı sırası gelen oyuncuya doğru çevir */
+  chessAutoFlip: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -21,6 +25,8 @@ const DEFAULTS: Settings = {
   vibration: true,
   ghost: true,
   showButtons: true,
+  chessHints: true,
+  chessAutoFlip: false,
 };
 const KEY = 'settings:v1';
 

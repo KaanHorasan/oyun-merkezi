@@ -78,20 +78,106 @@ while len(positions) < N_POSITIONS:
         if terminal > 25:
             continue
     entry = {'fen': fen, 'moves': moves}
+    if not moves:
+        entry['term'] = 'mate' if b.is_checkmate() else 'stale'
     idx = len(positions)
     if idx < N_AFTER:
-        after = {}
+        after, san = {}, {}
         for m in b.legal_moves:
+            san[m.uci()] = b.san(m)          # SAN, hamle yapılmadan ÖNCE alınır (belirsizlik giderme, +, #)
             b.push(m)
             after[m.uci()] = fen_of(b)
             b.pop()
         entry['after'] = after
+        entry['san'] = san
     entry['perft2'] = perft(b, 2)
     if idx < N_PERFT3:
         entry['perft3'] = perft(b, 3)
     positions.append(entry)
 
+
+# ---------- Tam oyunlar: her hamle sonrası durum bayrakları ve PGN hamle metni ----------
+ENDGAME_ROOTS = [
+    'k7/8/8/8/8/8/8/K6R w - - 0 1',        # K+R vs K
+    'k7/8/8/8/8/8/8/K5Q1 w - - 0 1',       # K+Q vs K
+    'k7/8/8/8/8/8/8/K5B1 w - - 0 1',       # K+B vs K (yetersiz materyal)
+    'k7/8/8/8/8/8/8/K5N1 w - - 0 1',       # K+N vs K (yetersiz materyal)
+    'k7/8/8/8/8/8/8/K3NN2 w - - 0 1',      # K+2N vs K (yetersiz DEĞİL)
+    'k6b/8/8/8/8/8/8/K1B5 w - - 0 1',      # K+B vs K+B (aynı renk fil)
+    'k6b/8/8/8/8/8/8/K5B1 w - - 0 1',      # K+B vs K+B (zıt renk fil)
+    '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1',     # piyon oyun sonu
+    'k7/8/8/8/8/8/8/K5nN w - - 0 1',      # K+N vs K+N
+]
+
+# Başlangıç pozisyonlarının hepsi gerçekten geçerli olmalı (python-chess bunu kendiliğinden denetlemez)
+for fen in ROOTS + ENDGAME_ROOTS:
+    assert chess.Board(fen).is_valid(), 'geçersiz başlangıç pozisyonu: ' + fen
+
+def tkey(b):
+    """python-chess'in kullandığı pozisyon anahtarı (tekrar sayımı için)"""
+    return b._transposition_key()
+
+def flags_of(b):
+    """Durum bayrakları tek sayıda: mat=1, pat=2, yetersiz materyal=4, 3 tekrar=8, 50 hamle=16"""
+    return (
+        (1 if b.is_checkmate() else 0)
+        | (2 if b.is_stalemate() else 0)
+        | (4 if b.is_insufficient_material() else 0)
+        | (8 if b.is_repetition(3) else 0)
+        | (16 if b.is_fifty_moves() else 0)   # >= 100 yarım hamle ve yasal hamle var
+    )
+
+def random_game(root_fen, max_plies):
+    b = chess.Board(root_fen)
+    start = b.fen(en_passant='fen')
+    seen = {tkey(b): 1}
+    moves, flags = [], [flags_of(b)]
+    for _ in range(max_plies):
+        legal = list(b.legal_moves)
+        if not legal:
+            break
+        pool = legal
+        # tekrar ve 50 hamle durumlarına ulaşmak için bazen daha önce görülmüş pozisyonlara dön
+        if random.random() < 0.6:
+            back = []
+            for m in legal:
+                b.push(m)
+                if tkey(b) in seen:
+                    back.append(m)
+                b.pop()
+            if back:
+                pool = back
+        elif random.random() < 0.3:
+            special = [m for m in legal if b.is_capture(m) or m.promotion]
+            if special:
+                pool = special
+        m = random.choice(pool)
+        moves.append(m.uci())
+        b.push(m)
+        seen[tkey(b)] = seen.get(tkey(b), 0) + 1
+        flags.append(flags_of(b))
+    start_board = chess.Board(root_fen)
+    movetext = start_board.variation_san([chess.Move.from_uci(u) for u in moves])
+    return {'start': start, 'moves': moves, 'flags': flags, 'movetext': movetext}
+
+N_GAMES = int(os.environ.get('N_GAMES', 70))
+games = []
+for i in range(N_GAMES):
+    if i % 3 == 0:
+        root = chess.STARTING_FEN
+        plies = random.randint(30, 220)
+    else:
+        root = random.choice(ENDGAME_ROOTS)
+        plies = random.randint(40, 260)
+    games.append(random_game(root, plies))
+
 out = OUT
 with open(out, 'w') as f:
-    json.dump({'generator': 'tools/gen-chess-fixtures.py (python-chess)', 'positions': positions}, f, separators=(',', ':'))
-print(f'{len(positions)} pozisyon yazıldı ({terminal} bitmiş oyun dahil) -> {out}')
+    json.dump({'generator': 'tools/gen-chess-fixtures.py (python-chess)', 'positions': positions, 'games': games}, f, separators=(',', ':'))
+n_rep = sum(1 for g in games for fl in g['flags'] if fl & 8)
+n_fifty = sum(1 for g in games for fl in g['flags'] if fl & 16)
+n_insuf = sum(1 for g in games for fl in g['flags'] if fl & 4)
+n_mate = sum(1 for g in games for fl in g['flags'] if fl & 1) + sum(1 for p in positions if p.get('term') == 'mate')
+n_stale = sum(1 for g in games for fl in g['flags'] if fl & 2) + sum(1 for p in positions if p.get('term') == 'stale')
+print(f'{len(positions)} pozisyon, {len(games)} oyun yazıldı ({terminal} bitmiş oyun dahil) -> {out}')
+print(f'pozisyon ve oyunlardaki durumlar: mat {n_mate}, pat {n_stale}, yetersiz materyal {n_insuf}, 3 tekrar {n_rep}, 50 hamle {n_fifty}')
