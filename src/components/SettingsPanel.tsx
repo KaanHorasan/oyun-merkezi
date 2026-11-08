@@ -90,6 +90,12 @@ export default function SettingsPanel({ onClose, ghost = false, buttons = false,
               onChange={(v) => update({ chessAutoFlip: v })}
             />
             <Row
+              label="Taş animasyonu"
+              hint="Hamlede taşlar yerine kayarak gider"
+              value={settings.chessAnimation}
+              onChange={(v) => update({ chessAnimation: v })}
+            />
+            <Row
               label="Son saniye uyarısı"
               hint="Süreli oyunda son 5 saniyede her saniye tık sesi ve titreşim"
               value={settings.chessClockWarn}

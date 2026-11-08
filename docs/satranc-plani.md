@@ -106,9 +106,9 @@ Ortak ilerleme sistemine yeni istatistikler eklenir (`src/lib/progress/definitio
 |---|---|---|
 | 1 | Motor çekirdeği: tahta, FEN, hamle üretimi, **perft doğrulaması** | **Tamamlandı** |
 | 2 | Kural durumu: mat/pat/beraberlik, SAN/PGN, tekrar tespiti | **Tamamlandı** |
-| 3 | Arayüz v1 (aynı cihazda iki kişi): tahta, SVG taşlar, hamle, vurgular, terfi, geri al, kayıt | **Tamamlandı** (sürükle-bırak ve animasyon yok) |
-| 4 | Görev ve başarımlar (hafif ödüller, yukarıdaki nota bak). Ses/titreşim ve ayarlar aşama 3'te eklendi | Sırada |
-| 5 | Cila: sürükle-bırak, taş kayma animasyonu, temalar (PGN paylaş aşama 3'te eklendi) | Sonra |
+| 3 | Arayüz v1 (aynı cihazda iki kişi): tahta, SVG taşlar, hamle, vurgular, terfi, geri al, kayıt | **Tamamlandı** (sürükle-bırak ve animasyon aşama 5'te eklendi) |
+| 4 | Görev ve başarımlar (hafif ödüller, yukarıdaki nota bak). Ses/titreşim ve ayarlar aşama 3'te eklendi | **Tamamlandı** |
+| 5 | Cila: sürükle-bırak, taş kayma animasyonu, temalar (PGN paylaş aşama 3'te eklendi) | **Kısmen:** sürükle-bırak ve kayma animasyonu tamam, temalar sırada |
 | Sonra | **Yapay zeka** (4 seviye), ipucu, **günlük bulmaca**, online oyun | Ertelendi, ayrı planlanır |
 | Ek | Satranç saati (hamle başı + toplam süre) ve ekran boyutuna göre ölçekleme | **Tamamlandı** |
 
@@ -128,7 +128,32 @@ Ortak ilerleme sistemine yeni istatistikler eklenir (`src/lib/progress/definitio
 - **Aşama 3:** menü + iki oyunculu tahta, kendi çizdiğimiz SVG taşlar, yasal hamle noktaları, son hamle ve şah vurgusu, terfi
   seçici, alınan taşlar ve maddi üstünlük, hamle listesi, geri al, çevir, teslim, anlaşmalı beraberlik, PGN paylaş, otomatik kayıt,
   isteğe bağlı otomatik çevirme. Dokunma akışı (`controller.ts`) ve tahta eşlemesi (`geometry.ts`) testli.
-- **Bilinen eksikler:** sürükle-bırak, taş animasyonu, satranç görevleri ve başarımları. Para ödülü bilerek yok.
+- **Bilinen eksikler:** temalar (tahta/taş renkleri), yapay zeka. Para ödülü bilerek yok.
+
+### Aşama 5 (kısmen): sürükle-bırak ve animasyon
+
+- **Sürükle-bırak:** `boardGestures.ts` (parmak olaylarını bağlar) + `animation.ts` (`dropKind`, `slideLegs`, `slideDuration`,
+  `dragThreshold`; testli). Kendi taşına basınca hemen seçilir; eşik (kare payı %18, en az 6 px) aşılınca sürükleme başlar, taş
+  parmağı izler (native'de yarım kare yukarıda, 1,2x büyük), geçerli hedef vurgulanır. Bırakınca yasal kareye 110 ms'de oturur;
+  yasadışıysa geri döner; terfi karesine bırakınca seçici açılır, taş geri döner. Sürüklerken üstteki ScrollView kilitlenir,
+  web'de `touch-action: none`.
+- **Hamle animasyonu:** dokun-dokun ve terfi seçimiyle yapılan hamlede taş kayar (rokta kale de; sürükleyerek konan taş zaten
+  yerinde olduğundan yalnızca rokun kalesi kayar). 120-260 ms. Ayarlardan kapatılabilir (`chessAnimation`).
+- **Teknik not:** `PanResponder` + ref kalıbı projedeki lint kuralına (`react-hooks/refs`) yanlış alarm veriyor (VolumeSlider ve
+  Tetris'te de var). Burada olay mantığı ref'siz bir sınıfa (`BoardGestures`) taşındı, böylece satranç dosyaları lint'ten temiz geçiyor.
+- **Sonraya:** temalar, yakalanan taş için solma efekti, hamle önceden-girişi (premove).
+
+### Aşama 4 sonucu (görev ve başarımlar)
+
+- **İstatistikler** (`definitions.ts`): `ch.games`, `ch.timedGames`, `ch.checkmates`, `ch.captures`, `ch.promotions`, `ch.castles`
+  (hepsi toplanan). `ch.wins`, `ch.winsHard`, `ch.winStreak` yapay zekaya bırakıldı (iki kişilik modda "galibiyet" anlamsız).
+- **Sömürüyü önleme:** istatistikler hamle anında değil **oyun bitince** bildirilir (al-geri al-tekrar al işe yaramaz); en az
+  10 yarım hamle yapılmamış oyun hiç sayılmaz; oyun başına bir kez bildirilir (bitişi geri alıp yeniden bitirmek tekrar saymaz).
+  Oyun sonu para ödülü yok.
+- **Günlük görevler:** 5 şablon (oyun bitir, taş al, mat ile bitir, terfi, rok). Seçim kuralı aynı: 1 Tetris + 1 Mayın Tarlası +
+  kalanlardan 1 (artık Satranç görevleri de bu havuzda).
+- **Başarımlar:** Satranççı, Mat Ustası, Rokçu, Terfi, Taş Avcısı, Saate Karşı (üçer basamak, düşük ödüller).
+- Kod: `src/games/chess/progress.ts` + `progress.test.ts`; arayüz oyun bitince `ChessScreen.tsx` içinde bildirir.
 
 ### Süre (saat) ve ekran ölçekleme
 

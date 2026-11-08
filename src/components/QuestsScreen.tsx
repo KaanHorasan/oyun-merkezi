@@ -128,7 +128,7 @@ function AchievementCard({ a, onClaim }: { a: AchievementView; onClaim: () => vo
   );
 }
 
-const SECTIONS: GameTag[] = ['minesweeper', 'tetris', 'general'];
+const SECTIONS: GameTag[] = ['minesweeper', 'tetris', 'chess', 'general'];
 
 export default function QuestsScreen() {
   const { view, refresh, claimQuest, claimBonus, claimAchievement } = useProgress();

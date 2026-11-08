@@ -1,12 +1,17 @@
+import { useEffect, useLayoutEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import { StyleSheet, View } from 'react-native';
-import type { GestureResponderEvent } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import Svg, { Circle, Rect, Text as SvgText } from 'react-native-svg';
+import { slideDuration } from './animation';
+import type { SlideAnim } from './animation';
+import { BoardGestures } from './boardGestures';
+import type { DragState } from './boardGestures';
 import type { ChessGame } from './engine/game';
 import { EMPTY, fileOf, moveFrom, moveTo, rankOf } from './engine/types';
 import type { Target } from './controller';
-import { isDarkSquare, squareOrigin, xyToSquare } from './geometry';
-import { PieceInSvg } from './pieces';
+import { isDarkSquare, squareOrigin } from './geometry';
+import { PieceIcon, PieceInSvg } from './pieces';
 
 const COLORS = {
   light: '#dfe6f5',
@@ -19,6 +24,9 @@ const COLORS = {
   coordOnDark: '#dfe6f5',
 };
 
+/** Web'de sürüklerken sayfanın kaymasını/metin seçmesini engeller */
+const WEB_NO_SCROLL = (Platform.OS === 'web' ? { touchAction: 'none', userSelect: 'none' } : {}) as ViewStyle;
+
 type Props = {
   game: ChessGame;
   /** Her hamlede artar: oyun nesnesi yerinde değiştiği için yeniden çizimi tetikler */
@@ -29,16 +37,61 @@ type Props = {
   targets: Target[];
   showHints: boolean;
   checkSquare: number;
-  onSquare: (sq: number) => void;
+  /** Taş sürüklenebilir mi (oyun bitmemiş, onay/terfi penceresi kapalı) */
+  canDrag: boolean;
+  /** Oynanan hamlenin kayma animasyonu (yoksa null) */
+  slide: SlideAnim | null;
+  /** Kareye dokunuldu ya da taş o kareye bırakıldı (`viaDrag`) */
+  onSquare: (sq: number, viaDrag?: boolean) => void;
+  /** Sürükleme başlayınca/bitince (üstteki kaydırmayı kilitlemek için) */
+  onDragChange?: (dragging: boolean) => void;
 };
 
-/** Tahtanın tamamı tek bir SVG: kareler, vurgular, koordinatlar, taşlar, yasal hamle noktaları. */
-export default function ChessBoard({ game, size, flipped, selected, targets, showHints, checkSquare, onSquare }: Props) {
+/**
+ * Tahtanın zemini tek bir SVG: kareler, vurgular, koordinatlar, taşlar, yasal hamle noktaları.
+ * Üstünde: dokunma/sürükleme katmanı, sürüklenen taş, hamle kayma animasyonu (hareketli taşlar ayrı katmanlarda çizilir).
+ * Dokunma akışı: taşa dokun = seç (sonra hedefe dokun) ya da taşı tutup hedefe sürükle.
+ */
+export default function ChessBoard({ game, size, flipped, selected, targets, showHints, checkSquare, canDrag, slide, onSquare, onDragChange }: Props) {
   'use no memo'; // game dışarıdan değiştirilen (mutable) bir nesne
   const cell = size / 8;
   const last = game.lastMove;
   const lastFrom = last ? moveFrom(last.move) : -1;
   const lastTo = last ? moveTo(last.move) : -1;
+
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [slideDone, setSlideDone] = useState(-1);
+  const [dragPos] = useState(() => new Animated.ValueXY());
+  const [dragScale] = useState(() => new Animated.Value(1));
+  const [hoverPos] = useState(() => new Animated.ValueXY());
+  const [hoverOpacity] = useState(() => new Animated.Value(0));
+  const [progress] = useState(() => new Animated.Value(0));
+
+  // Dokunma/sürükleme olayları (boardGestures.ts); güncel değerler her çizimde verilir
+  const [gestures] = useState(() => new BoardGestures({ dragPos, dragScale, hoverPos, hoverOpacity, setDrag }));
+  useEffect(() => {
+    gestures.update({ game, size, flipped, selected, canDrag, onSquare, onDragChange });
+  });
+
+  // Hamle kayma animasyonu: yeni bir `slide` gelince 0'dan 1'e oynar (ilk çizimden önce sıfırlanır, taş hedefte yanıp sönmez)
+  useLayoutEffect(() => {
+    if (!slide || slide.legs.length === 0) return;
+    progress.setValue(0);
+    const anim = Animated.timing(progress, { toValue: 1, duration: slideDuration(slide.legs[0]), easing: Easing.out(Easing.cubic), useNativeDriver: false });
+    anim.start(({ finished }) => {
+      if (finished) setSlideDone(slide.id);
+    });
+    return () => anim.stop();
+  }, [slide, progress]);
+
+  const sliding = slide !== null && slide.legs.length > 0 && slideDone !== slide.id;
+  // Hareketli (sürüklenen / kayan) taşların kendi katmanında çizildiği kareler: zeminde çizilmez
+  const hidden = new Set<number>();
+  if (drag) {
+    hidden.add(drag.from);
+    if (drag.landingTo >= 0) hidden.add(drag.landingTo);
+  }
+  if (sliding) for (const leg of slide.legs) hidden.add(leg.to);
 
   const squares: ReactElement[] = [];
   const overlays: ReactElement[] = [];
@@ -82,7 +135,7 @@ export default function ChessBoard({ game, size, flipped, selected, targets, sho
       }
 
       const piece = game.board.pieceAt(sq);
-      if (piece !== EMPTY) pieces.push(<PieceInSvg key={`p${sq}`} piece={piece} x={x} y={y} size={cell} />);
+      if (piece !== EMPTY && !hidden.has(sq)) pieces.push(<PieceInSvg key={`p${sq}`} piece={piece} x={x} y={y} size={cell} />);
     }
   }
 
@@ -100,21 +153,69 @@ export default function ChessBoard({ game, size, flipped, selected, targets, sho
     }
   }
 
-  const onRelease = (e: GestureResponderEvent) => {
-    onSquare(xyToSquare(e.nativeEvent.locationX, e.nativeEvent.locationY, size, flipped));
-  };
+  const slideSprites: ReactElement[] = [];
+  if (sliding) {
+    slide.legs.forEach((leg, i) => {
+      const piece = game.board.pieceAt(leg.to);
+      if (piece === EMPTY) return;
+      const a = squareOrigin(leg.from, size, flipped);
+      const b = squareOrigin(leg.to, size, flipped);
+      slideSprites.push(
+        <Animated.View
+          key={`sl${slide.id}-${i}`}
+          pointerEvents="none"
+          style={[
+            styles.sprite,
+            {
+              width: cell,
+              height: cell,
+              transform: [
+                { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [a.x, b.x] }) },
+                { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [a.y, b.y] }) },
+              ],
+            },
+          ]}
+        >
+          <PieceIcon piece={piece} size={cell} />
+        </Animated.View>,
+      );
+    });
+  }
 
   return (
-    <View style={{ width: size, height: size, borderRadius: 10, overflow: 'hidden' }}>
-      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {squares}
-        {overlays}
-        {coords}
-        {pieces}
-        {hints}
-      </Svg>
-      {/* Dokunma katmanı: konum, çizimle aynı formülle kareye çevrilir (geometry.ts, testli) */}
-      <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onResponderRelease={onRelease} />
+    <View style={[{ width: size, height: size }, WEB_NO_SCROLL]}>
+      <View style={{ width: size, height: size, borderRadius: 10, overflow: 'hidden' }}>
+        <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          {squares}
+          {overlays}
+          {coords}
+          {pieces}
+          {hints}
+        </Svg>
+      </View>
+      {/* Dokunma/sürükleme katmanı: konum, çizimle aynı formülle kareye çevrilir (geometry.ts, testli) */}
+      <View style={[StyleSheet.absoluteFill, WEB_NO_SCROLL]} {...gestures.pan.panHandlers} />
+      {slideSprites}
+      {drag && (
+        <>
+          {/* Sürüklerken taşın bırakılabileceği kareyi vurgular */}
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.hover, { width: cell, height: cell, opacity: hoverOpacity, transform: hoverPos.getTranslateTransform() }]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.sprite, { width: cell, height: cell, transform: [...dragPos.getTranslateTransform(), { scale: dragScale }] }]}
+          >
+            <PieceIcon piece={drag.piece} size={cell} />
+          </Animated.View>
+        </>
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  sprite: { position: 'absolute', left: 0, top: 0 },
+  hover: { position: 'absolute', left: 0, top: 0, borderWidth: 3, borderColor: COLORS.selected, backgroundColor: 'rgba(250,204,21,0.22)', borderRadius: 4 },
+});

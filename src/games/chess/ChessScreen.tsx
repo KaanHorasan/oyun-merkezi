@@ -4,8 +4,11 @@ import { AppState, Pressable, ScrollView, Share, StyleSheet, Text, View, useWind
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SettingsPanel from '@/components/SettingsPanel';
 import { haptic, playSound } from '@/lib/feedback';
+import { record } from '@/lib/progress/progress';
 import { useSettings } from '@/lib/settings';
 import type { GameProps } from '../types';
+import { slideLegs } from './animation';
+import type { SlideAnim } from './animation';
 import ChessBoard from './ChessBoard';
 import { ChessClock, TIME_PRESETS, createClock, describeControl, formatClock, lowThresholdMs, nowMs, presetById } from './clock';
 import { INITIAL_UI, checkedKingSquare, choosePromotion, tapSquare, targetsOf } from './controller';
@@ -19,6 +22,7 @@ import { computeLayout } from './layout';
 import { clearChess, loadChess, saveChess } from './persistence';
 import type { LoadedChess } from './persistence';
 import { PieceIcon } from './pieces';
+import { statsForFinishedGame } from './progress';
 import { advantageOf, capturedBy, colorName, otherColor } from './summary';
 
 const C = {
@@ -133,12 +137,16 @@ export default function ChessScreen({ onExit }: GameProps) {
   const [confirm, setConfirm] = useState<'resign' | 'draw' | 'new' | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [moveAnim, setMoveAnim] = useState<SlideAnim | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const settingsRef = useRef(settings);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const moveScroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const tickRef = useRef<() => void>(() => {});
   const warnKey = useRef('');
+  const animId = useRef(0);
+  const reported = useRef(new WeakSet<ChessGame>()); // ilerleme istatistiği bildirilen oyunlar (oyun başına bir kez)
   useEffect(() => {
     settingsRef.current = settings;
   });
@@ -182,8 +190,18 @@ export default function ChessScreen({ onExit }: GameProps) {
     }
   };
 
+  /** Oyun bittiyse görev/başarım istatistiklerini bildirir (en az 10 hamle; geri alıp yeniden bitirmek tekrar saymaz) */
+  const reportFinished = (g: ChessGame) => {
+    if (!g.isOver || reported.current.has(g)) return;
+    const stats = statsForFinishedGame(g, clock !== null);
+    if (stats.length === 0) return;
+    reported.current.add(g);
+    for (const st of stats) record(st.stat, st.value);
+  };
+
   /** Hamleden/geri almadan sonra: tahta yönü, kayıt, yeniden çizim */
   const refresh = (g: ChessGame) => {
+    reportFinished(g);
     const nf = settingsRef.current.chessAutoFlip && !g.isOver ? g.turn === BLACK : flipped;
     setFlipped(nf);
     saveChess(g, nf, clock);
@@ -210,8 +228,12 @@ export default function ChessScreen({ onExit }: GameProps) {
     return true;
   };
 
-  const afterMove = (rec: MoveRecord, g: ChessGame) => {
+  const afterMove = (rec: MoveRecord, g: ChessGame, viaDrag = false) => {
     const st = g.status;
+    // Taş kayma animasyonu (sürükle-bırakla konan taş kaymaz; rokun kalesi kayar)
+    const legs = settingsRef.current.chessAnimation ? slideLegs(rec, viaDrag) : [];
+    animId.current += 1;
+    setMoveAnim(legs.length > 0 ? { id: animId.current, legs } : null);
     if (clock) {
       const now = nowMs();
       clock.moved(rec.mover, now);
@@ -231,6 +253,7 @@ export default function ChessScreen({ onExit }: GameProps) {
     const g = new ChessGame();
     setGame(g);
     setClock(createClock(presetById(settings.chessTime).control));
+    setMoveAnim(null);
     setUi(INITIAL_UI);
     setFlipped(false);
     setConfirm(null);
@@ -242,6 +265,7 @@ export default function ChessScreen({ onExit }: GameProps) {
     if (!saved) return;
     setGame(saved.game);
     setClock(saved.clock);
+    setMoveAnim(null);
     setUi(INITIAL_UI);
     setFlipped(saved.flipped);
     setConfirm(null);
@@ -259,18 +283,19 @@ export default function ChessScreen({ onExit }: GameProps) {
     }
     setGame(null);
     setClock(null);
+    setMoveAnim(null);
     setUi(INITIAL_UI);
     setConfirm(null);
     setPhase('menu');
   };
 
-  const onSquare = (sq: number) => {
+  const onSquare = (sq: number, viaDrag = false) => {
     if (!game || confirm) return;
     if (flaggedNow()) return;
     const prev = ui.selected;
     const res = tapSquare(game, ui, sq);
     setUi(res.ui);
-    if (res.moved) afterMove(res.moved, game);
+    if (res.moved) afterMove(res.moved, game, viaDrag);
     else if (res.ui.selected !== null && res.ui.selected !== prev) fx('select');
   };
 
@@ -293,6 +318,7 @@ export default function ChessScreen({ onExit }: GameProps) {
       if (game.records.length < before && mover !== null) clock.undoMove(mover, now);
       else if (timeoutLoser !== null) clock.grantTime(timeoutLoser, now); // süre bitişi geri alındı: kısa ek süre
     }
+    setMoveAnim(null);
     setUi(INITIAL_UI);
     setConfirm(null);
     fx('select');
@@ -415,7 +441,10 @@ export default function ChessScreen({ onExit }: GameProps) {
         targets={targetsOf(game, ui.selected)}
         showHints={settings.chessHints}
         checkSquare={checkedKingSquare(game)}
+        canDrag={!over && confirm === null && ui.promotion === null}
+        slide={moveAnim}
         onSquare={onSquare}
+        onDragChange={setDragging}
       />
       {ui.promotion && (
         <View style={styles.promoWrap}>
@@ -568,13 +597,14 @@ export default function ChessScreen({ onExit }: GameProps) {
             <Text style={styles.how}>• Rok için şahı iki kare yana götür. Geçerken alma ve terfi kuralları tam uygulanır.</Text>
             <Text style={styles.how}>• Geri al ile yanlış hamleyi geri alabilir, Çevir ile tahtayı döndürebilirsin. Ayarlardan her hamlede otomatik çevirmeyi açabilirsin.</Text>
             <Text style={styles.how}>• Aynı pozisyon üç kez tekrarlanırsa, 50 hamlede piyon hamlesi ya da alış olmazsa veya mat için yeterli taş kalmazsa oyun berabere biter.</Text>
+            <Text style={styles.how}>• Görevler ve başarımlar oyun bitince sayılır (en az 10 hamle yapılmış olmalı): bitirilen oyun, alınan taş, terfi, rok, şah mat ve süreli oyun. Satrançta oyun sonu para ödülü yok; ödüller görev ve başarımlardan gelir.</Text>
             <Text style={styles.how}>• Süreli oyunda saat beyazın ilk hamlesinden sonra başlar. Süresi biten kaybeder; rakibinin mat edecek taşı yoksa oyun berabere biter. Menüye ya da ayarlara girince saat durur.</Text>
           </View>
         </ScrollView>
       )}
 
       {phase === 'play' && game && status && !landscape && (
-        <ScrollView contentContainerStyle={styles.play}>
+        <ScrollView contentContainerStyle={styles.play} scrollEnabled={!dragging}>
           <View style={{ width: boardSize, gap: Math.round(8 * s) }}>
             {topBar}
             {boardEl}

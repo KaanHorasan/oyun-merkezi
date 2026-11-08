@@ -113,15 +113,25 @@ Aynı cihazda iki kişi, tam kurallarla. Ana ekrandaki **♟️ Satranç** kart�
   Tahta, yazılar ve boşluklar ekran boyutuna göre büyür/küçülür (`layout.ts`, testli).
 - **Ayarlar (⚙):** yasal hamle noktaları aç/kapa, tahtayı her hamlede otomatik çevir (karşılıklı oynarken), son saniye uyarısı
   (son 5 saniyede tık sesi/titreşim), ses, titreşim.
+- **Sürükle-bırak ve animasyon:** taşa dokununca seçilir (yasal kareler görünür); taşı tutup sürüklersen taş parmağı izler
+  (telefonda parmağın biraz üstünde durur), geçerli hedef kare vurgulanır, bırakınca yerine oturur; yasadışı kareye ya da
+  tahta dışına bırakırsan taş geri döner. Piyonu son sıraya bırakınca terfi seçici açılır. Dokun-dokun eskisi gibi çalışır.
+  Hamlede taş yerine kayar (rokta kale de), süresi uzaklığa göre 120-260 ms. Ayarlardan "Taş animasyonu" kapatılabilir.
+  Sürüklerken sayfa kaymaz. (`boardGestures.ts`, `animation.ts`, `animation.test.ts`)
+- **Görevler ve başarımlar:** oyun bitince sayılır (en az 10 yarım hamle yapılmış olmalı, oyun başına bir kez): bitirilen oyun,
+  alınan taş, terfi, rok, şah mat ve süreli oyun. Günlük görevlere 5 satranç görevi eklendi (günde 1 Tetris + 1 Mayın Tarlası +
+  1 serbest görev; serbest görev Satranç'tan da çıkabilir) ve 6 başarım (Satranççı, Mat Ustası, Rokçu, Terfi, Taş Avcısı,
+  Saate Karşı). Ödüller hafif; oyun sonu para ödülü yok (`progress.ts`, `progress.test.ts`).
 - **Beraberlikler otomatiktir:** aynı pozisyon 3 kez, 50 hamlede piyon hamlesi/alış yok, ya da mat için yeterli taş yok.
-- **Bilerek v1'de yok:** yapay zeka, sürükle-bırak, taş animasyonu, para ödülü (iki kişilik modda kendi kendine
-  oynayıp para kazanılmasın diye), satranç görevleri/başarımları.
-
+- **Bilerek v1'de yok:** yapay zeka, para ödülü (iki kişilik modda kendi kendine
+  oynayıp para kazanılmasın diye), 
 Yapı (`src/games/chess/`):
 - `engine/`: saf (arayüzsüz) motor. `board.ts` tahta (0x88, yap/geri al), `fen.ts`, `moves.ts` (hamle üretimi, perft),
   `status.ts` (yetersiz materyal, pozisyon anahtarı), `san.ts` (notasyon), `pgn.ts`, `game.ts` (`ChessGame`: hamle geçmişi,
   durum, geri al, teslim, kayıt).
-- `clock.ts` satranç saati (saf mantık, testli), `layout.ts` ekran boyutuna göre yerleşim (saf, testli).
+- `clock.ts` satranç saati (saf mantık, testli), `layout.ts` ekran boyutuna göre yerleşim (saf, testli), `progress.ts` oyun
+  sonu istatistikleri (görev/başarım), `animation.ts` kayma/bırakma yardımcıları (testli), `boardGestures.ts` dokunma ve
+  sürükleme olayları.
 - `controller.ts` dokunma akışı, `geometry.ts` tahta-ekran eşlemesi, `summary.ts` alınan taşlar, `ChessBoard.tsx` tahta
   (tek bir SVG), `pieces.tsx` + `pieceShapes.ts` kendi çizdiğimiz taşlar, `ChessScreen.tsx` ekran, `persistence.ts` kayıt.
 
@@ -228,7 +238,7 @@ rekor kaydı (cihazda saklanır), uygulama arka plana geçince otomatik duraklat
    - [x] Aşama 1: motor çekirdeği (tahta, FEN, hamle üretimi, perft doğrulaması)
    - [x] Aşama 2: mat/pat/beraberlik, notasyon (SAN), PGN
    - [x] Aşama 3: arayüz (aynı cihazda iki kişi), hub kartı
-   - [ ] Aşama 4: satranç görevleri ve başarımları (hafif ödüllü)
-   - [ ] Aşama 5: cila (sürükle-bırak, taş animasyonu, temalar)
+   - [x] Aşama 4: satranç görevleri ve başarımları (hafif ödüllü)
+   - [ ] Aşama 5: cila: sürükle-bırak ve taş animasyonu tamam, temalar kaldı
 5. [ ] Hub cilası (ikonlar, ana ekran ayarları, uygulama adı/ikonu)
 6. [ ] Online özellikler (opsiyonel)

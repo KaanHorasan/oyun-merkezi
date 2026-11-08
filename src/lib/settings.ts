@@ -19,6 +19,8 @@ export type Settings = {
   chessTime: string;
   /** Satranç: sürenin son 5 saniyesinde her saniye tık sesi/titreşim */
   chessClockWarn: boolean;
+  /** Satranç: taşlar yerine kayarak gider (kapalıysa anında yer değiştirir) */
+  chessAnimation: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -33,6 +35,7 @@ const DEFAULTS: Settings = {
   chessAutoFlip: false,
   chessTime: 'none',
   chessClockWarn: true,
+  chessAnimation: true,
 };
 const KEY = 'settings:v1';
 

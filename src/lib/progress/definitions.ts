@@ -13,6 +13,12 @@ export type StatId =
   | 'tt.games' // biten oyun
   | 'tt.bestScore' // en yüksek skor
   | 'tt.maxLevel' // ulaşılan en yüksek seviye
+  | 'ch.games' // Satranç: biten oyun (en az 10 hamle yapılmış)
+  | 'ch.timedGames' // süreli biten oyun
+  | 'ch.checkmates' // şah mat ile biten oyun
+  | 'ch.captures' // biten oyunlarda alınan taş
+  | 'ch.promotions' // biten oyunlarda yapılan terfi
+  | 'ch.castles' // biten oyunlarda yapılan rok
   | 'quests.claimed'; // ödülü alınan günlük görev
 
 export const STAT_KIND: Record<StatId, 'sum' | 'max'> = {
@@ -26,21 +32,30 @@ export const STAT_KIND: Record<StatId, 'sum' | 'max'> = {
   'tt.games': 'sum',
   'tt.bestScore': 'max',
   'tt.maxLevel': 'max',
+  'ch.games': 'sum',
+  'ch.timedGames': 'sum',
+  'ch.checkmates': 'sum',
+  'ch.captures': 'sum',
+  'ch.promotions': 'sum',
+  'ch.castles': 'sum',
   'quests.claimed': 'sum',
 };
 
-export type GameTag = 'tetris' | 'minesweeper' | 'general';
+export type GameTag = 'tetris' | 'minesweeper' | 'chess' | 'general';
 export const GAME_LABEL: Record<GameTag, string> = {
   tetris: 'Tetris',
   minesweeper: 'Mayın Tarlası',
+  chess: 'Satranç',
   general: 'Genel',
 };
 
 // ---------- Günlük görevler ----------
 
+export type QuestGame = Exclude<GameTag, 'general'>;
+
 export type QuestTemplate = {
   id: string;
-  game: 'tetris' | 'minesweeper';
+  game: QuestGame;
   stat: StatId;
   /** {n} yerine hedef yazılır */
   text: string;
@@ -57,6 +72,12 @@ export const QUEST_TEMPLATES: QuestTemplate[] = [
   { id: 'ms-cells', game: 'minesweeper', stat: 'ms.cells', text: "Mayın Tarlası'nda {n} güvenli kare aç", targets: [100, 250, 500], rewards: [20, 40, 70] },
   { id: 'ms-flags', game: 'minesweeper', stat: 'ms.flags', text: '{n} mayına doğru bayrak koy', targets: [5, 12, 25], rewards: [20, 40, 70] },
   { id: 'ms-open', game: 'minesweeper', stat: 'ms.maxOpen', text: 'Tek hamlede {n} kare aç', targets: [30, 80, 150], rewards: [20, 40, 65] },
+  // Satranç: iki kişilik modda kendi kendine oynayıp kolay para kazanılmasın diye ödüller hafif; saymak için oyunun bitmesi gerekir
+  { id: 'ch-games', game: 'chess', stat: 'ch.games', text: "Satrançta {n} oyun bitir", targets: [1, 2, 3], rewards: [15, 25, 40] },
+  { id: 'ch-captures', game: 'chess', stat: 'ch.captures', text: "Satrançta oyun bitirerek {n} taş al", targets: [8, 16, 30], rewards: [15, 30, 50] },
+  { id: 'ch-mate', game: 'chess', stat: 'ch.checkmates', text: 'Bir satranç oyununu şah mat ile bitir ({n} kez)', targets: [1, 2, 3], rewards: [25, 45, 70] },
+  { id: 'ch-promo', game: 'chess', stat: 'ch.promotions', text: 'Satrançta bir piyonu terfi ettir ({n} kez)', targets: [1, 2, 3], rewards: [25, 40, 60] },
+  { id: 'ch-castle', game: 'chess', stat: 'ch.castles', text: 'Satrançta {n} kez rok yap', targets: [1, 2, 3], rewards: [15, 25, 35] },
 ];
 
 /** Bütün günlük görevler tamamlanınca verilen ek ödül */
@@ -65,7 +86,7 @@ export const DAILY_QUEST_COUNT = 3;
 
 export type DailyQuest = {
   id: string;
-  game: 'tetris' | 'minesweeper';
+  game: QuestGame;
   stat: StatId;
   text: string;
   target: number;
@@ -98,7 +119,7 @@ export function mulberry32(seed: number): () => number {
 
 /**
  * Bir günün görevleri: tarihten (YYYY-AA-GG) türetilir, yani aynı gün herkes için aynıdır.
- * Her gün 1 Tetris + 1 Mayın Tarlası görevi ve kalan görevlerden 1 tane daha.
+ * Her gün 1 Tetris + 1 Mayın Tarlası görevi ve kalan görevlerden (Satranç dahil) 1 tane daha.
  */
 export function pickDailyQuests(date: string, templates: QuestTemplate[] = QUEST_TEMPLATES): DailyQuest[] {
   const rnd = mulberry32(hashString('daily:' + date));
@@ -159,6 +180,20 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     tiers: [{ target: 5, reward: 30 }, { target: 10, reward: 100 }, { target: 15, reward: 300 }] },
   { id: 'tt-games', title: 'Oyun Meraklısı', desc: 'Tetris oyunu bitir', icon: '🎮', game: 'tetris', stat: 'tt.games',
     tiers: [{ target: 1, reward: 10 }, { target: 10, reward: 50 }, { target: 50, reward: 200 }] },
+
+  // Satranç (oyun bitince sayılır; ödüller düşük, asıl ödüller yapay zekayla gelecek)
+  { id: 'ch-games', title: 'Satranççı', desc: 'Satranç oyunu bitir', icon: '♟️', game: 'chess', stat: 'ch.games',
+    tiers: [{ target: 1, reward: 10 }, { target: 10, reward: 50 }, { target: 50, reward: 200 }] },
+  { id: 'ch-mate', title: 'Mat Ustası', desc: 'Şah mat ile oyun bitir', icon: '👑', game: 'chess', stat: 'ch.checkmates',
+    tiers: [{ target: 1, reward: 25 }, { target: 10, reward: 100 }, { target: 50, reward: 350 }] },
+  { id: 'ch-castle', title: 'Rokçu', desc: 'Rok yap', icon: '🏰', game: 'chess', stat: 'ch.castles',
+    tiers: [{ target: 1, reward: 15 }, { target: 10, reward: 60 }, { target: 50, reward: 200 }] },
+  { id: 'ch-promo', title: 'Terfi', desc: 'Piyonu terfi ettir', icon: '⬆️', game: 'chess', stat: 'ch.promotions',
+    tiers: [{ target: 1, reward: 20 }, { target: 10, reward: 80 }, { target: 30, reward: 250 }] },
+  { id: 'ch-capture', title: 'Taş Avcısı', desc: 'Taş al', icon: '⚔️', game: 'chess', stat: 'ch.captures',
+    tiers: [{ target: 50, reward: 20 }, { target: 500, reward: 100 }, { target: 2500, reward: 400 }] },
+  { id: 'ch-timed', title: 'Saate Karşı', desc: 'Süreli oyun bitir', icon: '⏱️', game: 'chess', stat: 'ch.timedGames',
+    tiers: [{ target: 1, reward: 20 }, { target: 10, reward: 80 }, { target: 30, reward: 250 }] },
 
   // Genel
   { id: 'daily', title: 'Günlük Düzenli', desc: 'Günlük görev ödülü al', icon: '🎯', game: 'general', stat: 'quests.claimed',
